@@ -92,6 +92,9 @@ def test_summary_matches_rows() -> None:
 
 
 if __name__ == "__main__":
+    import sys
+
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
     # Rewrite the summary block in place.
     text = DOC.read_text(encoding="utf-8")
     head, rest = text.split("<!-- summary:start -->")

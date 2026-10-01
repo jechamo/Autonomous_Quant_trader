@@ -22,11 +22,28 @@ independiente y cubierto por tests.
 | `BrokerAdapter` + `SimulatedBroker` | ✅ |
 | `Trading212Broker` | ⏳ stub (iteración 2) |
 | Esquema Supabase (`supabase/migrations`) con RLS y privilegios mínimos | ✅ aplicado en el proyecto «Autonomous trading» |
-| Paper Trader, Shadow Engine, AI Analyst, Dashboard | ⏳ ver [`docs/roadmap.md`](docs/roadmap.md) |
+| **Trader en streaming** (Binance spot, PAPER): feed WebSocket, motor por eventos, libro en sombra + evidencia forward, Risk Engine, exchange paper realista | ✅ bloque 2 |
+| SQLite local + **dashboard en localhost** (kill switch, pausa, agresividad) | ✅ bloque 2 |
+| **Research Lab**: research programado, golden check, champion/challenger, meta-learning | ✅ bloque 3 |
+| **Acciones de EE. UU.** (Alpaca en vivo, Yahoo/Alpaca para research y simulación) | ✅ bloque 3 |
+| AI Analyst, Champion/Challenger formal, dashboard desplegado | ⏳ ver [`docs/roadmap.md`](docs/roadmap.md) |
 
 Estado detallado requisito por requisito: [`docs/prd-traceability.md`](docs/prd-traceability.md).
 
-## Inicio rápido
+## Trader en streaming (local)
+
+```bash
+uv sync
+uv run python -m services.trader run                     # top-10 USDC en vivo + dashboard + Research Lab
+uv run python -m services.trader research                # un ciclo del Research Lab ahora
+uv run python -m services.trader simulate --learn        # 72 h reales, aprendiendo sobre la marcha
+uv run python -m services.trader simulate --market stocks --headless   # acciones de EE. UU.
+uv run python -m services.trader run --market stocks     # acciones en vivo (claves Alpaca en .env)
+```
+
+Sólo PAPER. Detalles, flujo y límites en [`services/trader/README.md`](services/trader/README.md).
+
+## Inicio rápido (research)
 
 ```bash
 uv sync                      # instala dependencias (Python 3.11+)
@@ -62,9 +79,9 @@ Monte Carlo, régimen, estabilidad de parámetros, Edge Score y veredicto
 ## Estructura
 
 ```
-apps/dashboard/        Frontend (Lovable / Next.js → Vercel) — pendiente
+apps/dashboard/        dashboard local (local/); Lovable / Next.js → Vercel pendiente
 services/research/     CLI del Research Engine
-services/trader/       Paper/Live trader — pendiente
+services/trader/       trader en streaming (PAPER) + API/WebSocket del dashboard local
 services/ai_analyst/   Analista IA (sin acceso a órdenes) — pendiente
 packages/aqt/
   common/      configuración (DEV/PAPER/LIVE, doble flag LIVE), tipos
@@ -77,7 +94,8 @@ packages/aqt/
   statistics/  validación estadística, Bayes, FDR, Monte Carlo, Edge Score
   sizing/      Position Sizing Engine
   risk/        Risk Engine, perfiles, límites absolutos
-  brokers/     BrokerAdapter, SimulatedBroker, Trading212 (stub)
+  brokers/     BrokerAdapter, SimulatedBroker, PaperExchange, Trading212 (stub)
+  stream/      trader en streaming: feed, velas, features, estrategias, evidencia, SQLite
   research/    pipeline + informes
 supabase/migrations/   esquema PostgreSQL + RLS
 docs/                  PRD, arquitectura, roadmap

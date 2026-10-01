@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Callable, Mapping, Sequence
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from typing import Any
@@ -36,6 +37,7 @@ class StudyConfig:
     min_trades: int = 30
     seed: int = 7
     name: str = "study"
+    catalog: str = "daily"
 
 
 @dataclass
@@ -127,22 +129,45 @@ class StudyReport:
         }
 
 
+def _research_pair(
+    df: pd.DataFrame, rcfg: ResearchConfig
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        return run_research(df, rcfg).to_dict(), None
+    except Exception as exc:  # one bad pair must not sink the study
+        return None, f"{type(exc).__name__}: {exc}"
+
+
 def run_study(
     data: Mapping[str, pd.DataFrame],
     strategies: Sequence[str],
     cfg: StudyConfig | None = None,
     cost_for: Callable[[str], CostModel] | None = None,
+    instrument_for: Callable[[str], tuple[bool, str]] | None = None,
+    workers: int = 1,
 ) -> StudyReport:
-    """Run every (symbol, strategy) pair, then apply study-wide BH-FDR."""
+    """Run every (symbol, strategy) pair, then apply study-wide BH-FDR.
+
+    ``instrument_for(symbol) -> (tradable, currency)`` defaults to the Trading 212 universe;
+    the Research Lab passes its own for crypto pairs. ``workers > 1`` runs the pairs in parallel
+    processes; results (and therefore the global FDR) are identical to a sequential run.
+    """
     cfg = cfg or StudyConfig()
-    cost_for = cost_for or (lambda s: CostModel.trading212(get_instrument(s).currency))
+
+    def _t212(symbol: str) -> tuple[bool, str]:
+        inst = get_instrument(symbol)
+        return inst.tradable_t212_eu, inst.currency
+
+    instrument_for = instrument_for or _t212
+    cost_for = cost_for or (lambda s: CostModel.trading212(instrument_for(s)[1]))
     pairs: list[PairResult] = []
     data_hashes: dict[str, str] = {}
+    jobs: list[tuple[PairResult, pd.DataFrame, ResearchConfig]] = []
 
     for symbol, df in data.items():
-        inst = get_instrument(symbol)
+        tradable, currency = instrument_for(symbol)
         for strategy in strategies:
-            pair = PairResult(symbol, strategy, inst.tradable_t212_eu, inst.currency)
+            pair = PairResult(symbol, strategy, tradable, currency)
             pairs.append(pair)
             if len(df) < MIN_BARS:
                 pair.error = f"only {len(df)} bars (< {MIN_BARS})"
@@ -151,6 +176,7 @@ def run_study(
                 symbol=symbol,
                 timeframe=cfg.timeframe,
                 strategy=strategy,
+                catalog=cfg.catalog,
                 oos_fraction=cfg.oos_fraction,
                 walk_forward_windows=cfg.walk_forward_windows,
                 fdr_q=cfg.fdr_q,
@@ -159,12 +185,22 @@ def run_study(
                 seed=cfg.seed,
                 costs=cost_for(symbol),
             )
-            try:
-                pair.report = run_research(df, rcfg).to_dict()
-            except Exception as exc:  # one bad pair must not sink the study
-                pair.error = f"{type(exc).__name__}: {exc}"
-                continue
-            data_hashes[symbol] = pair.report["meta"]["data_hash"]
+            jobs.append((pair, df, rcfg))
+
+    if workers > 1 and len(jobs) > 1:
+        with ProcessPoolExecutor(max_workers=workers) as pool:
+            outcomes = list(
+                pool.map(_research_pair, [d for _, d, _ in jobs], [c for *_, c in jobs])
+            )
+    else:
+        outcomes = [_research_pair(d, c) for _, d, c in jobs]
+    for (pair, _, _), (report, error) in zip(jobs, outcomes, strict=True):
+        if error is not None:
+            pair.error = error
+            continue
+        pair.report = report
+        assert report is not None
+        data_hashes[pair.symbol] = report["meta"]["data_hash"]
 
     # Study-wide FDR over every variant tested.
     offsets: list[tuple[PairResult, int]] = []

@@ -66,6 +66,7 @@ class FeatureEngine:
     vol_window: int = 20
     atr_window: int = 14
     rsi_window: int = 14
+    flow_windows: Sequence[int] = (5, 15)
     regime: RegimeClassifier = field(default_factory=RegimeClassifier)
 
     def compute(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -98,6 +99,13 @@ class FeatureEngine:
         feats["low_20"] = df["low"].rolling(20, min_periods=20).min()
         feats["prev_high_20"] = feats["high_20"].shift(1)
         feats["prev_low_20"] = feats["low_20"].shift(1)
+        if "taker_buy_volume" in df.columns:
+            # Signed order flow (intraday data): share of volume bought by aggressive takers,
+            # mapped to [-1, 1] over the last n bars. Only uses bars up to and including t.
+            signed = 2.0 * df["taker_buy_volume"] - df["volume"]
+            for n in self.flow_windows:
+                vol = df["volume"].rolling(n, min_periods=n).sum().replace(0.0, np.nan)
+                feats[f"flow_imbalance_{n}"] = signed.rolling(n, min_periods=n).sum() / vol
 
         out = pd.concat(
             [

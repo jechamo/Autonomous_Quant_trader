@@ -33,9 +33,9 @@ def test_report_files(tmp_path: Path) -> None:
     df = generate_ohlcv(900, seed=2)
     rep = run_research(df, ResearchConfig("X", "1d", "momentum", monte_carlo_sims=100))
     jp, mp = write_report(rep, tmp_path)
-    data = json.loads(jp.read_text())
+    data = json.loads(jp.read_text(encoding="utf-8"))
     assert data["selected_strategy"]["config_hash"] in jp.name
-    assert "Verdict" in mp.read_text()
+    assert "Verdict" in mp.read_text(encoding="utf-8")
     assert "Edge Score" in render_markdown(rep)
 
 

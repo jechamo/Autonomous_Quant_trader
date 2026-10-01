@@ -27,9 +27,18 @@ from aqt.statistics import (
     wilson_interval,
 )
 from aqt.statistics.bayes import BetaPosterior
-from aqt.strategies import expand_grid, get_strategy
+from aqt.strategies import expand_grid, resolve_strategy
 
-PERIODS_PER_YEAR = {"1d": 252, "1h": 252 * 7, "15m": 252 * 26, "5m": 252 * 78}
+PERIODS_PER_YEAR = {
+    "1d": 252,
+    "1h": 252 * 7,
+    "15m": 252 * 26,
+    "5m": 252 * 78,
+    # 24/7 markets (crypto): every minute of the year is a bar.
+    "1min": 365 * 24 * 60,
+    "5min": 365 * 24 * 12,
+    "15min": 365 * 24 * 4,
+}
 
 
 @dataclass(frozen=True)
@@ -37,6 +46,7 @@ class ResearchConfig:
     symbol: str
     timeframe: str
     strategy: str
+    catalog: str = "daily"  # which hypothesis catalog to resolve ``strategy`` from
     oos_fraction: float = 0.3
     walk_forward_windows: int = 5
     fdr_q: float = 0.05
@@ -99,7 +109,7 @@ def _regime_compatibility(by_regime: dict[str, dict[str, Any]], current: str | N
 def run_research(df: pd.DataFrame, cfg: ResearchConfig) -> ResearchReport:
     ppy = PERIODS_PER_YEAR.get(cfg.timeframe, 252)
     features = FeatureEngine().compute(df)
-    base, grid = get_strategy(cfg.strategy)
+    base, grid = resolve_strategy(cfg.strategy, cfg.catalog)
     variants = expand_grid(base, grid)
     if all(v.params != base.params for v in variants):
         variants.insert(0, base.render())

@@ -72,6 +72,44 @@ confianza mínimos, EV neto mínimo, drawdown y pérdida diaria máximos, nº po
 consecutivas, coeficiente Kelly, reserva de caja, spread y slippage máximos. El resultado se
 recorta siempre a `AbsoluteLimits`; un `RiskProfile` construido a mano que los viole lanza error.
 
+### Trader en streaming (`packages/aqt/stream`, `services/trader`)
+Motor por eventos determinista que se usa igual en vivo (WebSocket de Binance) y en replay
+(ticks grabados en SQLite). Reloj = eventos: la vela `[t, t+Δ)` se decide al llegar el primer
+evento ≥ `t+Δ`, y la orden se llena tras la latencia contra el libro de ese momento.
+
+- `bars` (velas por mid + flujo firmado de trades) → `features` (EMA, σ EWMA, z-score,
+  desequilibrio de flujo y de libro, ruptura sobre máximos *previos*) → `strategies` (intención
+  con stop/objetivo escalados por volatilidad).
+- Filtro de costes en el motor: objetivo ≥ `min_cost_multiple` × (fees + spread + slippage).
+- Dos libros: **sombra** (cada señal, virtual, mismo modelo de ejecución) → `EvidenceTracker`
+  (Edge Score + BH-FDR sobre ventana móvil) y **paper** (Signal → `RiskEngine` → `PaperExchange`).
+- Guardas del motor más restrictivas que el Risk Engine: órdenes/min, cooldown, pausa; las
+  salidas (stop/objetivo en cada quote, tiempo y señal al cierre de vela) también pasan por él.
+- `SQLiteStore`: ticks, decisiones con todos los checks, órdenes, operaciones, equity y controles.
+- `services/trader/app.py`: FastAPI en 127.0.0.1 con WebSocket para el dashboard local.
+
+### Research Lab (`packages/aqt/lab`, `services/trader/lab_scheduler.py`)
+Aprendizaje continuo sin LLM, todo validado estadísticamente:
+
+```
+historia 1 s (Binance) / 1 min (Yahoo, Alpaca) ─► velas de research + flujo (taker / BVC)
+   ─► run_study(INTRADAY_CATALOG): IS → BH-FDR → OOS → walk-forward → MC → FDR global
+   ─► golden check en el StreamingEngine real ─► registro: candidate → CHALLENGER
+   ─► sombra en vivo (evidencia forward) ─► review: CHAMPION (opera paper vía Risk Engine)
+                                                    o RETIRED (+ lección)
+   ─► meta-learning sobre sus operaciones (purged CV) ─► versión filtrada → CHALLENGER
+```
+
+- Un único lenguaje de reglas: el DSL que valida el research se ejecuta en vivo
+  (`DslStreamStrategy`), reconstruyendo las velas de research desde las del motor; la paridad de
+  señales está testeada. En replays las features causales se precalculan (equivalentes).
+- El ciclo de research corre en un proceso aparte cada 6 h; revisión y meta-learning cada hora;
+  la estrategia del motor se actualiza en caliente (`StreamingEngine.set_strategies`).
+- Memoria en SQLite por mercado: `rules`, `rule_events`, `lessons`, `research_runs`; modelos ML
+  versionados con hash de integridad.
+- Acciones: sesión de EE. UU. (sin entradas en los últimos 15 min, cierre 5 min antes) y flujo
+  estimado con Bulk Volume Classification tanto en research como en vivo.
+
 ### Datos
 Histórico masivo en Parquet (`data/parquet/<tf>/<symbol>.parquet`) consultado con DuckDB.
 Supabase guarda metadatos, estrategias, experimentos, señales, órdenes, métricas y configuración.

@@ -110,3 +110,19 @@ def get_strategy(name: str) -> tuple[StrategySpec, dict[str, list[float | int]]]
         return CATALOG[name]
     except KeyError as exc:
         raise KeyError(f"Unknown strategy {name!r}. Available: {list_strategies()}") from exc
+
+
+def resolve_strategy(
+    name: str, catalog: str = "daily"
+) -> tuple[StrategySpec, dict[str, list[float | int]]]:
+    """Look a strategy up in the daily ``CATALOG`` or the ``intraday`` Research Lab catalog."""
+    if catalog == "daily":
+        return get_strategy(name)
+    if catalog == "intraday":
+        from aqt.strategies.intraday import INTRADAY_CATALOG
+
+        try:
+            return INTRADAY_CATALOG[name]
+        except KeyError as exc:
+            raise KeyError(f"Unknown intraday strategy {name!r}") from exc
+    raise KeyError(f"Unknown catalog {catalog!r}")

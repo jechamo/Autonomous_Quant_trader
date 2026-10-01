@@ -132,8 +132,8 @@ def write_report(report: ResearchReport, out_dir: str | Path) -> tuple[Path, Pat
     stem = f"{cfg['symbol']}_{cfg['timeframe']}_{cfg['strategy']}_{chash}"
     json_path = out / f"{stem}.json"
     md_path = out / f"{stem}.md"
-    json_path.write_text(json.dumps(d, indent=2, sort_keys=True, default=str))
-    md_path.write_text(render_markdown(report))
+    json_path.write_text(json.dumps(d, indent=2, sort_keys=True, default=str), encoding="utf-8")
+    md_path.write_text(render_markdown(report), encoding="utf-8")
     return json_path, md_path
 
 
@@ -183,6 +183,8 @@ def write_study_report(study: StudyReport, out_dir: str | Path) -> tuple[Path, P
     out.mkdir(parents=True, exist_ok=True)
     stem = f"study_{study.config.name}_{study.study_hash}"
     json_path, md_path = out / f"{stem}.json", out / f"{stem}.md"
-    json_path.write_text(json.dumps(study.to_dict(), indent=2, sort_keys=True, default=str))
-    md_path.write_text(render_study_markdown(study))
+    json_path.write_text(
+        json.dumps(study.to_dict(), indent=2, sort_keys=True, default=str), encoding="utf-8"
+    )
+    md_path.write_text(render_study_markdown(study), encoding="utf-8")
     return json_path, md_path
