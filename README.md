@@ -21,8 +21,10 @@ independiente y cubierto por tests.
 | Risk Engine (APPROVE / REJECT / ADJUST_SIZE) + slider de agresividad con límites absolutos | ✅ |
 | `BrokerAdapter` + `SimulatedBroker` | ✅ |
 | `Trading212Broker` | ⏳ stub (iteración 2) |
-| Esquema Supabase (`supabase/migrations`) con RLS | ✅ ficheros (no aplicado) |
+| Esquema Supabase (`supabase/migrations`) con RLS y privilegios mínimos | ✅ aplicado en el proyecto «Autonomous trading» |
 | Paper Trader, Shadow Engine, AI Analyst, Dashboard | ⏳ ver [`docs/roadmap.md`](docs/roadmap.md) |
+
+Estado detallado requisito por requisito: [`docs/prd-traceability.md`](docs/prd-traceability.md).
 
 ## Inicio rápido
 
@@ -33,7 +35,16 @@ uv run python -m services.research.cli run --symbol SPY --timeframe 1d --strateg
 uv run python -m services.research.cli list
 ```
 
-Sin datos reales, la CLI usa `--source synthetic` (determinista). Para datos propios:
+Datos reales (Yahoo Finance, diario ajustado) y estudio completo con FDR global:
+
+```bash
+uv run python -m services.research.cli fetch --universe default --start 2005-01-01
+uv run python -m services.research.cli study --universe tradable --strategies all
+uv run python -m services.research.cli study --universe tradable --persist   # guarda en Supabase
+```
+
+Universos: `default`, `tradable` (invertible en Trading 212 desde la UE), `eur`, `proxies`, o una
+lista `AAPL,SAN.MC`. Sin red, la CLI usa `--source synthetic` (determinista). Para datos propios:
 
 ```bash
 # Parquet: data/parquet/<timeframe>/<SYMBOL>.parquet
@@ -73,6 +84,13 @@ docs/                  PRD, arquitectura, roadmap
 tests/
 ```
 
+## Supabase
+
+Aplica en orden los ficheros de `supabase/migrations/` (SQL Editor o MCP). Son atómicos y
+re-ejecutables; el esquema inicial aborta sin crear nada si encuentra tablas ajenas con alguno de
+nuestros nombres. `20261001010000_harden_privileges.sql` retira el acceso `anon`, deja al
+dashboard sólo lectura + slider/kill switch y bloquea la llamada RPC a la función de auditoría.
+
 ## Seguridad
 
 - Los secretos nunca están en el código ni en el frontend: `.env` está ignorado, CI ejecuta gitleaks.
@@ -81,4 +99,4 @@ tests/
 - El slider de agresividad nunca supera `AbsoluteLimits` (riesgo/trade ≤ 2 %, sin apalancamiento,
   sin cortos, sin margen).
 
-Documentación: [PRD](docs/PRD.md) · [Arquitectura](docs/architecture.md) · [Roadmap](docs/roadmap.md)
+Documentación: [PRD](docs/PRD.md) · [Trazabilidad](docs/prd-traceability.md) · [Arquitectura](docs/architecture.md) · [Roadmap](docs/roadmap.md)

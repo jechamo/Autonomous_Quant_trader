@@ -1,9 +1,11 @@
 # Roadmap
 
+Detalle requisito por requisito en [`prd-traceability.md`](prd-traceability.md).
+
 | Paso | Descripción | Estado |
 |---|---|---|
 | 1 | Repositorio, CI, tests, `.env.example`, exclusión de secretos | ✅ iteración 1 |
-| 2 | Proyecto Supabase: esquema, RLS, auditoría de configuración | 🟡 migración escrita y validada en Postgres 16; falta crear el proyecto y aplicarla |
+| 2 | Proyecto Supabase: esquema, RLS, auditoría de configuración | 🟡 esquema + hardening aplicados en «Autonomous trading» (advisor de seguridad limpio); faltan Vault, Storage y Auth |
 | 3 | Research Engine + CLI con informe reproducible | ✅ |
 | 4 | Strategy DSL | ✅ |
 | 5 | Statistical Validation Engine | ✅ (OOS, WF, purged CV, Bayes, MC, FDR, costes, régimen) |
@@ -18,6 +20,15 @@
 | 14 | Deploy (Vercel / Supabase / Railway) | ⏳ |
 | 15 | Seguridad: entornos DEV/PAPER/LIVE, kill switch global | 🟡 flags y kill switch en código y esquema |
 | 16 | Go-live gate (100 €) | ⏳ |
+
+## Bloque 1 (en curso): research con datos reales
+
+- ✅ `YahooAdapter` + comando `fetch` → Parquet; universo invertible en T212 UE.
+- ✅ Comando `study`: símbolos × estrategias con FDR global y costes Trading 212.
+- ✅ `SupabaseStore` para guardar experimentos y backtests (`study --persist`).
+- ⏳ Ejecutar con datos reales: requiere permitir en la red del entorno
+  `query1.finance.yahoo.com`, `query2.finance.yahoo.com`, `fc.yahoo.com`, `guce.yahoo.com` y
+  `nzeuzxtpqrsvyvpxaugz.supabase.co`, y el secreto `SUPABASE_SERVICE_ROLE_KEY`.
 
 ## Próximos pasos técnicos sugeridos
 

@@ -9,11 +9,59 @@
 --     (aggressiveness slider, kill switch) — every change is audited by trigger.
 --   * The AI analyst writes only to ai_reviews / ai_hypotheses / lessons via its own role and
 --     never has access to broker secrets, order placement or risk configuration.
+--
+-- Safe to re-run: every object is created idempotently, and a preflight check aborts with a
+-- clear message if a table with one of our names already exists but was not created by this
+-- migration (our tables are marked with COMMENT 'aqt').
+
+begin;
 
 create extension if not exists pgcrypto;
 
+-- ---------------------------------------------------------------------------- preflight
+do $$
+declare
+    t text;
+    conflicts text[] := '{}';
+begin
+    foreach t in array array[
+        'strategies',
+        'strategy_versions',
+        'strategy_promotions',
+        'experiments',
+        'backtests',
+        'walk_forward_runs',
+        'paper_runs',
+        'market_regimes',
+        'signals',
+        'orders',
+        'fills',
+        'positions',
+        'portfolio_snapshots',
+        'risk_events',
+        'daily_metrics',
+        'hypotheses',
+        'trade_reviews',
+        'lessons',
+        'ai_reviews',
+        'ai_hypotheses',
+        'configuration',
+        'config_audit_log'
+    ] loop
+        if to_regclass('public.' || t) is not null
+           and coalesce(obj_description(to_regclass('public.' || t), 'pg_class'), '') <> 'aqt' then
+            conflicts := conflicts || t;
+        end if;
+    end loop;
+    if array_length(conflicts, 1) > 0 then
+        raise exception 'Tablas ya existentes que no pertenecen a Autonomous Quant Trader: %', conflicts
+            using hint = 'Usa un proyecto Supabase vacío o renombra/elimina esas tablas antes de aplicar la migración.';
+    end if;
+end;
+$$;
+
 -- ---------------------------------------------------------------------------- strategies
-create table public.strategies (
+create table if not exists public.strategies (
     id              uuid primary key default gen_random_uuid(),
     name            text not null unique,
     family          text not null,
@@ -24,7 +72,7 @@ create table public.strategies (
     updated_at      timestamptz not null default now()
 );
 
-create table public.strategy_versions (
+create table if not exists public.strategy_versions (
     id              uuid primary key default gen_random_uuid(),
     strategy_id     uuid not null references public.strategies (id) on delete cascade,
     version         integer not null,
@@ -37,7 +85,7 @@ create table public.strategy_versions (
     unique (config_hash)
 );
 
-create table public.strategy_promotions (
+create table if not exists public.strategy_promotions (
     id                  uuid primary key default gen_random_uuid(),
     strategy_version_id uuid not null references public.strategy_versions (id),
     from_status         text not null,
@@ -48,7 +96,7 @@ create table public.strategy_promotions (
 );
 
 -- ---------------------------------------------------------------------------- research
-create table public.experiments (
+create table if not exists public.experiments (
     id              uuid primary key default gen_random_uuid(),
     hypothesis_id   uuid,
     name            text not null,
@@ -65,7 +113,7 @@ create table public.experiments (
     finished_at     timestamptz
 );
 
-create table public.backtests (
+create table if not exists public.backtests (
     id                  uuid primary key default gen_random_uuid(),
     experiment_id       uuid references public.experiments (id) on delete cascade,
     strategy_version_id uuid references public.strategy_versions (id),
@@ -91,7 +139,7 @@ create table public.backtests (
     created_at          timestamptz not null default now()
 );
 
-create table public.walk_forward_runs (
+create table if not exists public.walk_forward_runs (
     id                  uuid primary key default gen_random_uuid(),
     experiment_id       uuid references public.experiments (id) on delete cascade,
     strategy_id         uuid references public.strategies (id),
@@ -104,7 +152,7 @@ create table public.walk_forward_runs (
     created_at          timestamptz not null default now()
 );
 
-create table public.paper_runs (
+create table if not exists public.paper_runs (
     id                  uuid primary key default gen_random_uuid(),
     strategy_version_id uuid references public.strategy_versions (id),
     portfolio_kind      text not null default 'shadow'
@@ -115,7 +163,7 @@ create table public.paper_runs (
     metrics             jsonb not null default '{}'
 );
 
-create table public.market_regimes (
+create table if not exists public.market_regimes (
     id              bigint generated always as identity primary key,
     symbol          text not null,
     timeframe       text not null,
@@ -127,7 +175,7 @@ create table public.market_regimes (
 );
 
 -- ---------------------------------------------------------------------------- trading
-create table public.signals (
+create table if not exists public.signals (
     id                  uuid primary key default gen_random_uuid(),
     strategy_version_id uuid references public.strategy_versions (id),
     symbol              text not null,
@@ -148,7 +196,7 @@ create table public.signals (
     created_at          timestamptz not null default now()
 );
 
-create table public.orders (
+create table if not exists public.orders (
     id                  uuid primary key default gen_random_uuid(),
     signal_id           uuid references public.signals (id),
     client_order_id     text not null unique,   -- idempotency key
@@ -166,7 +214,7 @@ create table public.orders (
     updated_at          timestamptz not null default now()
 );
 
-create table public.fills (
+create table if not exists public.fills (
     id              uuid primary key default gen_random_uuid(),
     order_id        uuid not null references public.orders (id) on delete cascade,
     quantity        numeric not null,
@@ -176,7 +224,7 @@ create table public.fills (
     filled_at       timestamptz not null default now()
 );
 
-create table public.positions (
+create table if not exists public.positions (
     id              uuid primary key default gen_random_uuid(),
     environment     text not null check (environment in ('DEV', 'PAPER', 'LIVE')),
     portfolio       text not null default 'real',
@@ -189,7 +237,7 @@ create table public.positions (
     realized_pnl    numeric
 );
 
-create table public.portfolio_snapshots (
+create table if not exists public.portfolio_snapshots (
     id              bigint generated always as identity primary key,
     environment     text not null check (environment in ('DEV', 'PAPER', 'LIVE')),
     portfolio       text not null default 'real',
@@ -201,7 +249,7 @@ create table public.portfolio_snapshots (
     positions       jsonb not null default '[]'
 );
 
-create table public.risk_events (
+create table if not exists public.risk_events (
     id              uuid primary key default gen_random_uuid(),
     severity        text not null check (severity in ('info', 'warning', 'critical')),
     kind            text not null,            -- kill_switch, reconciliation_mismatch, ...
@@ -209,7 +257,7 @@ create table public.risk_events (
     created_at      timestamptz not null default now()
 );
 
-create table public.daily_metrics (
+create table if not exists public.daily_metrics (
     id              bigint generated always as identity primary key,
     environment     text not null,
     portfolio       text not null default 'real',
@@ -223,7 +271,7 @@ create table public.daily_metrics (
 );
 
 -- ---------------------------------------------------------------------------- learning / AI
-create table public.hypotheses (
+create table if not exists public.hypotheses (
     id              uuid primary key default gen_random_uuid(),
     source          text not null default 'human' check (source in ('human', 'ai', 'research')),
     claim           text not null,
@@ -234,11 +282,17 @@ create table public.hypotheses (
     created_at      timestamptz not null default now()
 );
 
-alter table public.experiments
-    add constraint experiments_hypothesis_fk
-    foreign key (hypothesis_id) references public.hypotheses (id);
+do $$
+begin
+    if not exists (select 1 from pg_constraint where conname = 'experiments_hypothesis_fk') then
+        alter table public.experiments
+            add constraint experiments_hypothesis_fk
+            foreign key (hypothesis_id) references public.hypotheses (id);
+    end if;
+end;
+$$;
 
-create table public.trade_reviews (
+create table if not exists public.trade_reviews (
     id              uuid primary key default gen_random_uuid(),
     signal_id       uuid references public.signals (id),
     order_id        uuid references public.orders (id),
@@ -247,7 +301,7 @@ create table public.trade_reviews (
     created_at      timestamptz not null default now()
 );
 
-create table public.lessons (
+create table if not exists public.lessons (
     id              uuid primary key default gen_random_uuid(),
     title           text not null,
     body            text not null,
@@ -256,7 +310,7 @@ create table public.lessons (
     created_at      timestamptz not null default now()
 );
 
-create table public.ai_reviews (
+create table if not exists public.ai_reviews (
     id              uuid primary key default gen_random_uuid(),
     kind            text not null,            -- daily_trade_review, degradation_analysis, ...
     model           text not null,
@@ -266,7 +320,7 @@ create table public.ai_reviews (
     created_at      timestamptz not null default now()
 );
 
-create table public.ai_hypotheses (
+create table if not exists public.ai_hypotheses (
     id              uuid primary key default gen_random_uuid(),
     ai_review_id    uuid references public.ai_reviews (id),
     hypothesis_id   uuid references public.hypotheses (id),
@@ -277,7 +331,7 @@ create table public.ai_hypotheses (
 );
 
 -- ---------------------------------------------------------------------------- configuration
-create table public.configuration (
+create table if not exists public.configuration (
     environment         text primary key check (environment in ('DEV', 'PAPER', 'LIVE')),
     aggressiveness      numeric not null default 20 check (aggressiveness between 0 and 100),
     kill_switch         boolean not null default false,
@@ -287,9 +341,10 @@ create table public.configuration (
     updated_at          timestamptz not null default now()
 );
 
-insert into public.configuration (environment) values ('DEV'), ('PAPER'), ('LIVE');
+insert into public.configuration (environment) values ('DEV'), ('PAPER'), ('LIVE')
+    on conflict (environment) do nothing;
 
-create table public.audit_log (
+create table if not exists public.config_audit_log (
     id              bigint generated always as identity primary key,
     table_name      text not null,
     row_key         text,
@@ -305,23 +360,24 @@ language plpgsql security definer set search_path = public as $$
 begin
     new.updated_at := now();
     new.updated_by := auth.uid();
-    insert into public.audit_log (table_name, row_key, action, old_row, new_row, actor)
+    insert into public.config_audit_log (table_name, row_key, action, old_row, new_row, actor)
     values ('configuration', new.environment, tg_op, to_jsonb(old), to_jsonb(new), auth.uid());
     return new;
 end;
 $$;
 
+drop trigger if exists configuration_audit on public.configuration;
 create trigger configuration_audit
     before update on public.configuration
     for each row execute function public.audit_configuration();
 
 -- ---------------------------------------------------------------------------- indexes
-create index on public.signals (created_at desc);
-create index on public.signals (symbol, created_at desc);
-create index on public.orders (status);
-create index on public.portfolio_snapshots (environment, portfolio, ts desc);
-create index on public.backtests (strategy_version_id);
-create index on public.risk_events (created_at desc);
+create index if not exists signals_created_at_idx on public.signals (created_at desc);
+create index if not exists signals_symbol_created_at_idx on public.signals (symbol, created_at desc);
+create index if not exists orders_status_idx on public.orders (status);
+create index if not exists portfolio_snapshots_environment_portfolio_ts_idx on public.portfolio_snapshots (environment, portfolio, ts desc);
+create index if not exists backtests_strategy_version_id_idx on public.backtests (strategy_version_id);
+create index if not exists risk_events_created_at_idx on public.risk_events (created_at desc);
 
 -- ---------------------------------------------------------------------------- RLS
 do $$
@@ -331,9 +387,11 @@ begin
         'strategies', 'strategy_versions', 'strategy_promotions', 'experiments', 'backtests',
         'walk_forward_runs', 'paper_runs', 'market_regimes', 'signals', 'orders', 'fills',
         'positions', 'portfolio_snapshots', 'risk_events', 'daily_metrics', 'hypotheses',
-        'trade_reviews', 'lessons', 'ai_reviews', 'ai_hypotheses', 'configuration', 'audit_log'
+        'trade_reviews', 'lessons', 'ai_reviews', 'ai_hypotheses', 'configuration', 'config_audit_log'
     ] loop
         execute format('alter table public.%I enable row level security', t);
+        execute format('comment on table public.%I is %L', t, 'aqt');
+        execute format('drop policy if exists "authenticated read" on public.%I', t);
         execute format(
             'create policy "authenticated read" on public.%I for select to authenticated using (true)',
             t
@@ -344,7 +402,10 @@ $$;
 
 -- Dashboard may change the slider / kill switch. It can never enable LIVE trading:
 -- that requires the runtime env flags as well, and this column is not writable here.
+drop policy if exists "authenticated update configuration" on public.configuration;
 create policy "authenticated update configuration" on public.configuration
     for update to authenticated using (true) with check (true);
 revoke update on public.configuration from authenticated;
 grant update (aggressiveness, kill_switch) on public.configuration to authenticated;
+
+commit;

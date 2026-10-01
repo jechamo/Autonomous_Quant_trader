@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from aqt.research.pipeline import ResearchReport
+from aqt.research.study import StudyReport
 
 
 def _pct(x: Any) -> str:
@@ -133,4 +134,55 @@ def write_report(report: ResearchReport, out_dir: str | Path) -> tuple[Path, Pat
     md_path = out / f"{stem}.md"
     json_path.write_text(json.dumps(d, indent=2, sort_keys=True, default=str))
     md_path.write_text(render_markdown(report))
+    return json_path, md_path
+
+
+def render_study_markdown(study: StudyReport) -> str:
+    d = study.to_dict()
+    m = d["meta"]
+    lines = [
+        f"# Study report — {m['name']}",
+        "",
+        f"- Generated: {m['generated_at']} · aqt {m['aqt_version']} · study hash "
+        f"`{m['study_hash']}`",
+        f"- {m['n_symbols']} symbols × strategies = {m['n_pairs']} pairs ({m['n_errors']} errors)",
+        f"- **{m['n_hypotheses']} hypotheses** tested; **{m['n_global_discoveries']}** survive "
+        f"study-wide BH-FDR (q={d['config']['fdr_q']})",
+        f"- **Challenger candidates: {m['n_candidates']}**",
+        "",
+        "Decisions: `CHALLENGER_CANDIDATE` (passes every check, survives global FDR, tradable in "
+        "Trading 212 EU) · `EVIDENCE_ONLY` (would qualify but is a non-tradable research proxy) "
+        "· `REJECTED` · `ERROR`.",
+        "",
+        "| # | Symbol | Strategy | Decision | OOS trades | OOS EV | OOS p | WF OOS EV | "
+        "Net EV (full) | Edge | Global adj. p | Failed checks |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|",
+    ]
+    for i, r in enumerate(d["ranking"], 1):
+        if r.get("error"):
+            lines.append(
+                f"| {i} | {r['symbol']} | {r['strategy']} | ERROR | | | | | | | | {r['error']} |"
+            )
+            continue
+        lines.append(
+            f"| {i} | {r['symbol']} | {r['strategy']} | {r['decision']} | {r['oos_trades']} | "
+            f"{_pct(r['oos_ev'])} | {_num(r['oos_p_value'], 3)} | {_pct(r['wf_oos_ev'])} | "
+            f"{_pct(r['net_ev_full'])} | {_num(r['edge_score'], 1)} | "
+            f"{_num(r['global_adjusted_p'], 3)} | {', '.join(r['failed_checks']) or '—'} |"
+        )
+    lines += [
+        "",
+        "_NO TRADE is a valid outcome: with no candidates the system stays in cash._",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def write_study_report(study: StudyReport, out_dir: str | Path) -> tuple[Path, Path]:
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    stem = f"study_{study.config.name}_{study.study_hash}"
+    json_path, md_path = out / f"{stem}.json", out / f"{stem}.md"
+    json_path.write_text(json.dumps(study.to_dict(), indent=2, sort_keys=True, default=str))
+    md_path.write_text(render_study_markdown(study))
     return json_path, md_path

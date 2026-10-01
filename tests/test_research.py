@@ -49,3 +49,48 @@ def test_cli(tmp_path: Path) -> None:
     assert list(tmp_path.glob("*.md"))
     assert "momentum" in runner.invoke(app, ["list"]).output
     assert runner.invoke(app, ["run", "--strategy", "nope"]).exit_code != 0
+
+
+def test_cli_fetch_and_study(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from aqt.data import SyntheticAdapter
+
+    import services.research.cli as cli
+
+    class Recorder:
+        def __init__(self) -> None:
+            self.calls: list[list[str]] = []
+
+        def persist_study(self, study, universe):  # type: ignore[no-untyped-def]
+            self.calls.append(universe)
+            return "exp-1"
+
+    rec = Recorder()
+    monkeypatch.setattr(cli, "_fetch_adapter", lambda: SyntheticAdapter(n=900))
+    monkeypatch.setattr(cli, "_result_store", lambda persist: rec)
+    runner = CliRunner()
+    data_dir = tmp_path / "pq"
+    res = runner.invoke(app, ["fetch", "--universe", "SAN.MC,AAPL", "--data-dir", str(data_dir)])
+    assert res.exit_code == 0, res.output
+    assert (data_dir / "1d" / "SAN.MC.parquet").exists()
+    res = runner.invoke(
+        app,
+        [
+            "study",
+            "--universe",
+            "SAN.MC,AAPL,MISSING",
+            "--strategies",
+            "breakout",
+            "--data-dir",
+            str(data_dir),
+            "--mc-sims",
+            "50",
+            "--persist",
+            "--out",
+            str(tmp_path),
+        ],
+    )
+    assert res.exit_code == 0, res.output
+    assert "Hypotheses" in res.output and "exp-1" in res.output
+    assert rec.calls == [["SAN.MC", "AAPL", "MISSING"]]
+    assert list(tmp_path.glob("study_*.md"))
+    assert runner.invoke(app, ["study", "--strategies", "nope"]).exit_code != 0

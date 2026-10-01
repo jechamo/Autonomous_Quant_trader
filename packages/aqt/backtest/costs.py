@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+T212_FX_FEE = 0.0015  # per side, published Trading 212 currency conversion fee
+
 
 @dataclass(frozen=True)
 class CostModel:
@@ -35,3 +37,25 @@ class CostModel:
     @classmethod
     def zero(cls) -> CostModel:
         return cls(0.0, 0.0, 0.0, 0.0, 0.0)
+
+    @classmethod
+    def trading212(
+        cls,
+        instrument_currency: str,
+        account_currency: str = "EUR",
+        spread_pct: float = 0.001,
+        slippage_pct: float = 0.0005,
+    ) -> CostModel:
+        """Trading 212 Invest: no commission, 0.15 % FX per side when currencies differ.
+
+        Spread/slippage defaults are deliberately conservative for small retail orders.
+        Fees must be re-verified against the broker's current price list before going live.
+        """
+        fx = T212_FX_FEE if instrument_currency.upper() != account_currency.upper() else 0.0
+        return cls(
+            fee_pct=0.0,
+            fee_fixed=0.0,
+            spread_pct=spread_pct,
+            slippage_pct=slippage_pct,
+            fx_pct=fx,
+        )
