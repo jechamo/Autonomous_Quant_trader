@@ -80,6 +80,7 @@ class LabScheduler:
         baseline: bool = True,
         review_cfg: ReviewConfig | None = None,
         on_pause: Callable[[bool], None] | None = None,
+        seeder: Callable[[float], None] | None = None,
     ) -> None:
         self.engine = engine
         self.store = store
@@ -92,6 +93,9 @@ class LabScheduler:
         self.baseline = baseline
         self.review_cfg = review_cfg
         self.on_pause = on_pause  # simulations pause the replay while researching
+        # Loads history for a timeframe the first time an active rule needs it (no warm-up).
+        self.seeder = seeder
+        self._seeded: set[float] = {60.0}
         enabled = research is not None and every_s > 0
         self.state = LabStatus(enabled=enabled, every_s=every_s)
         done = [r["finished_at"] for r in self.registry.runs(1) if r["finished_at"]]
@@ -102,6 +106,14 @@ class LabScheduler:
 
     # ------------------------------------------------------------------ actions
     def sync(self) -> dict[str, list[str]]:
+        if self.seeder is not None:
+            for tf in sorted({r.timeframe_s for r in self.registry.active() if r.timeframe_s}):
+                if tf not in self._seeded:
+                    try:
+                        self.seeder(tf)
+                    except Exception as exc:  # the rule then warms up live
+                        log.warning("could not pre-load %ss bars: %s", tf, exc)
+                    self._seeded.add(tf)
         return sync_engine_rules(self.engine, self.registry, self.book, self.baseline)
 
     def review(self) -> list[dict[str, Any]]:
@@ -205,8 +217,11 @@ class LabScheduler:
             row = evidence.get(r.rule_id)
             d["live"] = row.to_dict() if row is not None else None
             rules.append(d)
+        from aqt.analyst.hypotheses import HypothesisStore
+
         return {
             "status": self.status(),
+            "hypotheses": HypothesisStore(self.store, self.clock).recent(30),
             "runs": self.registry.runs(10),
             "rules": rules,
             "events": self.registry.events(50),

@@ -23,6 +23,7 @@ from aqt.backtest import CostModel
 from aqt.data.universe import get_instrument
 from aqt.research.pipeline import ResearchConfig, run_research
 from aqt.statistics import benjamini_hochberg
+from aqt.strategies.dsl import StrategySpec
 
 MIN_BARS = 600
 
@@ -129,6 +130,36 @@ class StudyReport:
         }
 
 
+def apply_global_fdr(pairs: Sequence[PairResult], q: float = 0.05) -> tuple[int, int]:
+    """Benjamini-Hochberg over every variant of every pair given (possibly several studies).
+
+    Sets each pair's ``survives_global_fdr``, ``global_adjusted_p`` and final ``decision``;
+    returns ``(n_hypotheses, n_discoveries)``.
+    """
+    offsets: list[tuple[PairResult, int]] = []
+    all_p: list[float] = []
+    for pair in pairs:
+        if pair.report is None:
+            continue
+        offsets.append((pair, len(all_p)))
+        all_p.extend(pair.report["multiple_testing"]["p_values"])
+    rejected, adjusted = benjamini_hochberg(np.array(all_p), q)
+    for pair, offset in offsets:
+        assert pair.report is not None
+        idx = offset + int(pair.report["multiple_testing"]["selected_index"])
+        pair.survives_global_fdr = bool(rejected[idx])
+        pair.global_adjusted_p = float(adjusted[idx])
+        local = pair.report["verdict"]["decision"]
+        if local == "CHALLENGER_CANDIDATE" and pair.survives_global_fdr:
+            pair.decision = "CHALLENGER_CANDIDATE" if pair.tradable else "EVIDENCE_ONLY"
+        else:
+            pair.decision = "REJECTED"
+    for pair in pairs:
+        if pair.error is not None:
+            pair.decision = "ERROR"
+    return len(all_p), int(rejected.sum())
+
+
 def _research_pair(
     df: pd.DataFrame, rcfg: ResearchConfig
 ) -> tuple[dict[str, Any] | None, str | None]:
@@ -145,6 +176,7 @@ def run_study(
     cost_for: Callable[[str], CostModel] | None = None,
     instrument_for: Callable[[str], tuple[bool, str]] | None = None,
     workers: int = 1,
+    specs: Mapping[str, tuple[StrategySpec, dict[str, list[float | int]]]] | None = None,
 ) -> StudyReport:
     """Run every (symbol, strategy) pair, then apply study-wide BH-FDR.
 
@@ -177,6 +209,8 @@ def run_study(
                 timeframe=cfg.timeframe,
                 strategy=strategy,
                 catalog=cfg.catalog,
+                spec=specs[strategy][0] if specs and strategy in specs else None,
+                grid=specs[strategy][1] if specs and strategy in specs else None,
                 oos_fraction=cfg.oos_fraction,
                 walk_forward_windows=cfg.walk_forward_windows,
                 fdr_q=cfg.fdr_q,
@@ -202,35 +236,12 @@ def run_study(
         assert report is not None
         data_hashes[pair.symbol] = report["meta"]["data_hash"]
 
-    # Study-wide FDR over every variant tested.
-    offsets: list[tuple[PairResult, int]] = []
-    all_p: list[float] = []
-    for pair in pairs:
-        if pair.report is None:
-            continue
-        offsets.append((pair, len(all_p)))
-        all_p.extend(pair.report["multiple_testing"]["p_values"])
-    rejected, adjusted = benjamini_hochberg(np.array(all_p), cfg.fdr_q)
-
-    for pair, offset in offsets:
-        assert pair.report is not None
-        idx = offset + int(pair.report["multiple_testing"]["selected_index"])
-        pair.survives_global_fdr = bool(rejected[idx])
-        pair.global_adjusted_p = float(adjusted[idx])
-        local = pair.report["verdict"]["decision"]
-        if local == "CHALLENGER_CANDIDATE" and pair.survives_global_fdr:
-            pair.decision = "CHALLENGER_CANDIDATE" if pair.tradable else "EVIDENCE_ONLY"
-        else:
-            pair.decision = "REJECTED"
-
-    for pair in pairs:
-        if pair.error is not None:
-            pair.decision = "ERROR"
+    n_hypotheses, n_discoveries = apply_global_fdr(pairs, cfg.fdr_q)
 
     return StudyReport(
         config=replace(cfg),
         pairs=pairs,
-        n_hypotheses=len(all_p),
-        n_global_discoveries=int(rejected.sum()),
+        n_hypotheses=n_hypotheses,
+        n_global_discoveries=n_discoveries,
         data_hashes=data_hashes,
     )

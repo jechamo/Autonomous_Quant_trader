@@ -52,13 +52,37 @@ class Market:
     slippage: float
     db: Path
     bvc: bool  # estimate order flow from bar returns (stocks: trades carry no aggressor side)
+    timeframes: tuple[str, ...] = ("1min",)  # what the Research Lab studies by default
+    lab_days: float = 365.0  # history per research cycle (crypto 1-minute is capped at 7 days)
 
 
 MARKETS = {
-    "binance": Market("binance", "24/7", 0.001, 1.0, 0.0005, DEFAULT_DB, False),
+    "binance": Market(
+        "binance", "24/7", 0.001, 1.0, 0.0005, DEFAULT_DB, False, ("1min", "1h", "4h")
+    ),
     # Alpaca: no commission; ~0.002 % covers SEC/FINRA sell fees. IEX spreads are conservative.
-    "stocks": Market("stocks", "us_equity", 0.00002, 2.0, 0.0003, STOCKS_DB, True),
+    "stocks": Market("stocks", "us_equity", 0.00002, 2.0, 0.0003, STOCKS_DB, True, ("15min", "1h")),
 }
+
+
+def _history(m: Market, sym: str, start_ms: int, end_ms: int, timeframe: str) -> Any:
+    """Research bars at ``timeframe`` from the market's own source (cached on disk)."""
+    from aqt.lab.cycle import BarData
+    from aqt.stream.history import load_binance_klines, load_klines_1s, resample_klines
+
+    if m.name == "stocks":
+        return BarData(_stock_loader()).bars(sym, start_ms, end_ms, timeframe)
+    if timeframe == "1min":
+        return resample_klines(load_klines_1s(sym, start_ms, end_ms), "1min")
+    return load_binance_klines(sym, start_ms, end_ms, timeframe)
+
+
+def _warmup_ms(m: Market, timeframe: str, bars: int = 300) -> int:
+    """Enough calendar time for ``bars`` bars (stocks only trade ~6.5 h a day, 5 days a week)."""
+    from aqt.stream.history import TIMEFRAME_SECONDS
+
+    scale = 5.2 if m.name == "stocks" else 1.0
+    return int(TIMEFRAME_SECONDS[timeframe] * bars * scale * 1000)
 
 
 def _market(name: str) -> Market:
@@ -114,7 +138,7 @@ def run(
     bar_seconds: float = typer.Option(5.0, help="Bar interval in seconds"),
     cash: float = typer.Option(100.0, help="Initial paper capital (quote currency)"),
     research_every: float = typer.Option(6.0, help="Research Lab cycle every N hours (0 = off)"),
-    lab_days: float = typer.Option(7.0, help="Days of history each research cycle studies"),
+    lab_days: float | None = typer.Option(None, help="Days of history per research cycle"),
     baseline: bool = typer.Option(True, help="Also run the 5 hand-written baseline rules"),
     aggressiveness: float = typer.Option(50.0, min=0, max=100),
     fee: float | None = typer.Option(None, help="Fee per side (default: market's)"),
@@ -136,7 +160,9 @@ def run(
     from aqt.stream.dsl_strategy import ResearchBarBook
 
     from services.trader.app import create_app
+    from services.trader.golive_monitor import GoLiveMonitor
     from services.trader.lab_scheduler import LabScheduler, subprocess_runner
+    from services.trader.notify import make_notifier
     from services.trader.runtime import TraderRuntime
 
     if host not in ("127.0.0.1", "localhost", "::1"):
@@ -146,6 +172,7 @@ def run(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
     m = _market(market)
+    lab_days = m.lab_days if lab_days is None else lab_days
     if broker not in ("local", "alpaca"):
         raise typer.BadParameter("broker must be local or alpaca")
     if broker == "alpaca" and m.name != "stocks":
@@ -199,8 +226,8 @@ def run(
     engine = StreamingEngine(cfg, store=store, broker=venue)
     engine.kill_switch = kill
     _apply_exchange_info(engine, infos)
-    book = ResearchBarBook(bvc=m.bvc)
-    _seed_book(book, syms, m)
+    book = ResearchBarBook(bvc=m.bvc, session=m.session)
+    _seed_book(book, syms, m, 60.0)
     lab = LabScheduler(
         engine,
         store,
@@ -208,9 +235,11 @@ def run(
         subprocess_runner(str(db), list(syms), lab_days, ["--fee", str(fee), "--market", m.name]),
         every_s=research_every * 3600,
         baseline=baseline,
+        seeder=lambda tf: _seed_book(book, syms, m, tf),
     )
     lab.sync()  # load the registry's active rules before the first tick
-    runtime = TraderRuntime(engine, store, feed, record=record, lab=lab)
+    golive = GoLiveMonitor(engine, store, make_notifier(), external_venue=broker == "alpaca")
+    runtime = TraderRuntime(engine, store, feed, record=record, lab=lab, golive=golive)
     url = f"http://{host}:{port}"
     where = "orders -> Alpaca PAPER account" if broker == "alpaca" else "local simulated fills"
     typer.echo(f"PAPER trader ({m.name}, {where}) on {', '.join(syms)} - dashboard {url}")
@@ -219,6 +248,8 @@ def run(
     typer.echo(
         f"paper equity: {cfg.initial_cash:.2f} {currency} (carried realized {realized:+.2f})"
     )
+    gate = golive.evaluate()
+    typer.echo(f"go-live gate: {gate.summary()}")
     if open_browser:
         webbrowser.open(url)
     uvicorn.run(create_app(runtime), host=host, port=port, log_level="warning")
@@ -258,29 +289,34 @@ def _alpaca_venue(syms: tuple[str, ...], capital: float) -> Any:
     return AlpacaPaperBroker(creds[0], creds[1], capital=capital, base_url=base_url, symbols=syms)
 
 
-def _seed_book(book: Any, syms: tuple[str, ...], m: Market) -> None:
-    """Pre-load recent 1-minute bars so lab rules can trade from the first minute."""
+def _seed_book(book: Any, syms: tuple[str, ...], m: Market, timeframe_s: float) -> None:
+    """Pre-load recent bars of every symbol at one timeframe so lab rules need no warm-up."""
     import time
 
     from aqt.stream.binance import recent_klines_1m
+    from aqt.stream.dsl_strategy import TIMEFRAME_LABELS
     from aqt.stream.history import klines_frame, resample_klines
 
+    tf = TIMEFRAME_LABELS[timeframe_s]
     now_ms = int(time.time() * 1000)
+    frames = {}
     for sym in syms:
         try:
-            if m.name == "stocks":
-                bars = _stock_loader()(sym, now_ms - 5 * 86_400_000, now_ms)
+            if m.name != "stocks" and tf == "1min":
+                frames[sym] = resample_klines(klines_frame(recent_klines_1m(sym)), "1min")
             else:
-                bars = resample_klines(klines_frame(recent_klines_1m(sym)), "1min")
-            book.seed(sym, 60.0, bars)
+                frames[sym] = _history(m, sym, now_ms - _warmup_ms(m, tf), now_ms, tf)
         except Exception as exc:  # optional: rules then warm up live
-            typer.echo(f"could not pre-load 1m history for {sym}: {exc}")
+            typer.echo(f"could not pre-load {tf} history for {sym}: {exc}")
+    if frames:
+        book.seed_many(timeframe_s, frames)
 
 
 @app.command()
 def research(
     symbols: str = typer.Option(DEFAULT_SYMBOLS, help="top:N[:QUOTE] or a list of symbols"),
-    days: float = typer.Option(7.0, help="Days of 1-second history to study"),
+    days: float | None = typer.Option(None, help="Days of history (default: market's, 365)"),
+    timeframes: str = typer.Option("", help="e.g. 1min,15min,1h,4h,1d (default: market's)"),
     end: str = typer.Option("", help="UTC end, e.g. 2026-09-30T00:00 (default: now)"),
     db: Path | None = typer.Option(None, help="SQLite with the rule registry (shared with run)"),
     fee: float | None = typer.Option(None, help="Fee per side (default: market's)"),
@@ -290,6 +326,9 @@ def research(
     max_active: int = typer.Option(10, help="Maximum live challenger/champion rules"),
     workers: int = typer.Option(0, help="Parallel processes (0 = CPUs - 1)"),
     review: bool = typer.Option(True, help="Also review live rules against forward evidence"),
+    analyst: bool = typer.Option(
+        True, help="First ask the AI Analyst for hypotheses (needs OPENAI_API_KEY)"
+    ),
 ) -> None:
     """Run one Research Lab cycle: discover, validate and promote rules (no trading)."""
     import time
@@ -301,11 +340,16 @@ def research(
     from aqt.risk.profile import RiskProfile
     from aqt.strategies.intraday import INTRADAY_CATALOG
     from aqt.stream.binance import quote_currency
-    from aqt.stream.history import load_klines_1s
+    from aqt.stream.history import TIMEFRAME_SECONDS, load_klines_1s
 
     m = _market(market)
     fee = m.fee if fee is None else fee
+    days = m.lab_days if days is None else days
     spread = (m.spread_bps if spread_bps is None else spread_bps) / 10_000
+    tfs = tuple(t.strip() for t in timeframes.split(",") if t.strip()) or m.timeframes
+    bad_tf = [t for t in tfs if t not in TIMEFRAME_SECONDS]
+    if bad_tf:
+        raise typer.BadParameter(f"unknown timeframes {bad_tf}; use {sorted(TIMEFRAME_SECONDS)}")
     syms = _market_symbols(m, symbols)
     data: Any
     if m.name == "stocks":
@@ -330,6 +374,7 @@ def research(
         slippage_pct=m.slippage,
         session=m.session,
         families=fams,
+        timeframes=tfs,
         max_active=max_active,
         **kw,
     )
@@ -337,9 +382,11 @@ def research(
     if end:
         end_ms = int(datetime.fromisoformat(end).replace(tzinfo=UTC).timestamp() * 1000)
     store = SQLiteStore(db or m.db)
+    if analyst:
+        _run_analyst(store, m, tfs)
     typer.echo(
-        f"research ({m.name}): {len(syms)} symbols x {len(fams)} families, {days:g} days, "
-        f"{cfg.workers} workers..."
+        f"research ({m.name}): {len(syms)} symbols, timeframes {', '.join(tfs)}, "
+        f"{days:g} days, {cfg.workers} workers..."
     )
     t0 = time.monotonic()
     result = run_research_cycle(store, cfg, data, end_ms=end_ms)
@@ -352,6 +399,8 @@ def research(
         f"hypotheses, {s['n_global_discoveries']} survive global FDR, "
         f"{s['n_candidates']} candidates, promoted {len(result.promoted)}"
     )
+    by_tf = ", ".join(f"{k} {v}" for k, v in s.get("hypotheses_by_timeframe", {}).items())
+    typer.echo(f"hypotheses by timeframe: {by_tf or '-'}")
     for g in s["golden"]:
         verdict = "PASS" if g["passed"] else "fail"
         typer.echo(
@@ -363,7 +412,10 @@ def research(
     typer.echo("best out-of-sample pairs:")
     for row in s["top_pairs"][:5]:
         ev = row.get("oos_ev") or 0.0
-        typer.echo(f"  {row['symbol']:<12}{row['strategy']:<22}OOS EV {ev:+.3%}  {row['decision']}")
+        typer.echo(
+            f"  {row['symbol']:<12}{row.get('timeframe', ''):<7}{row['strategy']:<22}"
+            f"OOS EV {ev:+.3%}  trades {row.get('oos_trades') or 0:<4} {row['decision']}"
+        )
     if review:
         live_id = f"live-{quote}" + ("-stocks" if m.name == "stocks" else "")
         for c in review_rules(store, live_id, RiskProfile.from_aggressiveness(50)):
@@ -373,6 +425,60 @@ def research(
     for r in active:
         typer.echo(f"  [{r.status}] {r.rule_id}")
     store.close()
+
+
+def _families() -> dict[str, str]:
+    from aqt.strategies.intraday import INTRADAY_CATALOG
+    from aqt.strategies.swing import SWING_CATALOG
+
+    return {n: s.description for n, (s, _) in {**INTRADAY_CATALOG, **SWING_CATALOG}.items()}
+
+
+def _run_analyst(store: SQLiteStore, m: Market, tfs: tuple[str, ...]) -> None:
+    """Ask the AI Analyst for new hypotheses; the next research cycle will examine them."""
+    from aqt.analyst.client import OpenAIClient, analyst_config_from_env
+    from aqt.analyst.hypotheses import run_analyst
+
+    cfg = analyst_config_from_env()
+    if cfg is None:
+        typer.echo("AI Analyst: off (set OPENAI_API_KEY in .env)")
+        return
+    typer.echo(f"AI Analyst ({cfg.model}): reading the lab's results...")
+    res = run_analyst(store, OpenAIClient(cfg), cfg, m.name, tfs, _families(), m.session)
+    if res.skipped:
+        typer.echo(f"AI Analyst skipped: {res.skipped}")
+        return
+    tokens = res.usage.get("total_tokens", "?")
+    typer.echo(f"AI Analyst: {len(res.created)} hypotheses accepted, {len(res.rejected)} invalid "
+               f"({tokens} tokens)")  # fmt: skip
+    for h in res.created:
+        typer.echo(f"  + {h.name} [{h.timeframe}] {h.claim[:110]}")
+    for name, why in res.rejected:
+        typer.echo(f"  - {name or '?'}: {why[:110]}")
+
+
+@app.command()
+def analyst(
+    market: str = typer.Option("binance", help="binance | stocks"),
+    db: Path | None = typer.Option(None, help="SQLite with the lab's memory"),
+    timeframes: str = typer.Option("", help="Allowed timeframes (default: market's)"),
+    dry_run: bool = typer.Option(False, help="Show what the analyst would read; no API call"),
+) -> None:
+    """Ask the AI Analyst for hypotheses now (tested by the next research cycle)."""
+    import json
+
+    from aqt.analyst.hypotheses import HypothesisStore, available_features, build_context
+
+    m = _market(market)
+    tfs = tuple(t.strip() for t in timeframes.split(",") if t.strip()) or m.timeframes
+    store = SQLiteStore(db or m.db)
+    if dry_run:
+        ctx = build_context(
+            store, m.name, tfs, _families(), available_features(m.session), HypothesisStore(store)
+        )
+        typer.echo(json.dumps(ctx, indent=2, default=str, ensure_ascii=False)[:6000])
+        return
+    _run_analyst(store, m, tfs)
 
 
 @app.command()
@@ -468,7 +574,8 @@ def simulate(
     speed: float = typer.Option(300.0, help="x real time in the dashboard (0 = maximum)"),
     headless: bool = typer.Option(False, help="No dashboard: run at full speed and summarise"),
     learn: bool = typer.Option(False, help="Run the Research Lab inside the simulation"),
-    lab_days: float = typer.Option(7.0, help="Days of history each research cycle studies"),
+    lab_days: float | None = typer.Option(None, help="Days of history per research cycle"),
+    timeframes: str = typer.Option("", help="Lab timeframes, e.g. 1min,1h (default: market's)"),
     research_every: float = typer.Option(24.0, help="Research every N simulated hours"),
     workers: int = typer.Option(0, help="Research processes (0 = CPUs - 1)"),
     families: str = typer.Option("", help="Intraday families for --learn (default: all)"),
@@ -507,7 +614,6 @@ def simulate(
         kline_events,
         load_klines_1s,
         merge_events,
-        resample_klines,
     )
     from aqt.stream.stocks import bar_events
 
@@ -515,6 +621,7 @@ def simulate(
         raise typer.BadParameter("the dashboard controls the kill switch: bind to localhost only")
     _refuse_live()
     m = _market(market)
+    lab_days = m.lab_days if lab_days is None else lab_days
     fee = m.fee if fee is None else fee
     spread = (m.spread_bps if spread_bps is None else spread_bps) / 10_000
     syms = _market_symbols(m, symbols)
@@ -572,7 +679,7 @@ def simulate(
     def sim_now() -> float:
         return engine.now or start_ts
 
-    book = ResearchBarBook()
+    book = ResearchBarBook(bvc=m.bvc, session=m.session)
     registry = RuleRegistry(store, sim_now)
     lab_extra: dict[str, Any] = {"workers": workers} if workers > 0 else {}
     fams = tuple(f.strip() for f in families.split(",") if f.strip())
@@ -586,6 +693,7 @@ def simulate(
         spread_pct=spread,
         slippage_pct=m.slippage,
         session=m.session,
+        timeframes=tuple(t.strip() for t in timeframes.split(",") if t.strip()) or m.timeframes,
         **lab_extra,
     )
     lab_data: Any = BarData(_stock_loader(), spread) if m.name == "stocks" else load_klines_1s
@@ -617,13 +725,18 @@ def simulate(
     if learn:
         typer.echo(f"initial research on the {lab_days:g} days before the simulation...")
         research(start_ts)
-        # Causal research features over [start - 1 day, end]: lab rules are warm from bar one.
-        for sym in syms:
-            if m.name == "stocks":  # ~1 trading day of warm-up for 200-bar indicators
-                warm = _stock_loader()(sym, start_ms - 4 * 86_400_000, end_ms)
-            else:
-                warm = resample_klines(load_klines_1s(sym, start_ms - 86_400_000, end_ms), "1min")
-            book.preload(sym, 60.0, FeatureEngine().compute(warm))
+        # Causal (lagged cross-sectional) research features over [start - warm-up, end] for every
+        # timeframe the lab studies: its rules are warm from the first bar, without look-ahead.
+        from aqt.features.cross_section import augment
+        from aqt.stream.history import TIMEFRAME_SECONDS
+
+        for tf in lab_cfg.all_timeframes:
+            warm_ms = 86_400_000 if tf == "1min" and m.name != "stocks" else _warmup_ms(m, tf)
+            frames = {sym: _history(m, sym, start_ms - warm_ms, end_ms, tf) for sym in syms}
+            frames = {k: v for k, v in frames.items() if not v.empty}
+            tf_s = float(TIMEFRAME_SECONDS[tf])
+            for sym, aug in augment(frames, tf_s, m.session).items():
+                book.preload(sym, tf_s, FeatureEngine().compute(aug))
         sync_engine_rules(engine, registry, book)
         typer.echo(f"live rules at start: {len(registry.active())}")
 

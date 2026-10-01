@@ -44,10 +44,16 @@ CREATE TABLE IF NOT EXISTS round_trips (
 );
 CREATE INDEX IF NOT EXISTS round_trips_run_book ON round_trips(run_id, book, exit_ts);
 CREATE TABLE IF NOT EXISTS equity (
-    run_id TEXT NOT NULL, ts REAL NOT NULL, equity REAL, cash REAL, positions_value REAL
+    run_id TEXT NOT NULL, ts REAL NOT NULL, equity REAL, cash REAL, positions_value REAL,
+    buy_hold REAL
 );
 CREATE INDEX IF NOT EXISTS equity_run_ts ON equity(run_id, ts);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS ops_events (
+    id INTEGER PRIMARY KEY, run_id TEXT NOT NULL, ts REAL NOT NULL, kind TEXT NOT NULL,
+    detail TEXT
+);
+CREATE INDEX IF NOT EXISTS ops_events_run_ts ON ops_events(run_id, ts);
 """
 
 
@@ -68,6 +74,9 @@ class SQLiteStore:
             cols = {r[1] for r in self._conn.execute("PRAGMA table_info(round_trips)")}
             if "context" not in cols:  # databases created before meta-labeling
                 self._conn.execute("ALTER TABLE round_trips ADD COLUMN context TEXT")
+            cols = {r[1] for r in self._conn.execute("PRAGMA table_info(equity)")}
+            if "buy_hold" not in cols:  # databases created before the go-live gate
+                self._conn.execute("ALTER TABLE equity ADD COLUMN buy_hold REAL")
             self._conn.commit()
         self._ticks: list[tuple[Any, ...]] = []
 
@@ -227,13 +236,41 @@ class SQLiteStore:
             )
 
     def log_equity(
-        self, run_id: str, ts: float, equity: float, cash: float, positions_value: float
+        self,
+        run_id: str,
+        ts: float,
+        equity: float,
+        cash: float,
+        positions_value: float,
+        buy_hold: float | None = None,
     ) -> None:
         with self._lock:
             self._conn.execute(
-                "INSERT INTO equity (run_id, ts, equity, cash, positions_value) VALUES (?,?,?,?,?)",
-                (run_id, ts, equity, cash, positions_value),
+                "INSERT INTO equity (run_id, ts, equity, cash, positions_value, buy_hold) "
+                "VALUES (?,?,?,?,?,?)",
+                (run_id, ts, equity, cash, positions_value, buy_hold),
             )
+
+    def log_ops_event(self, run_id: str, ts: float, kind: str, detail: str = "") -> None:
+        """Operational audit trail (kill switch, broker outages, reconciliation, go-live gate)."""
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO ops_events (run_id, ts, kind, detail) VALUES (?,?,?,?)",
+                (run_id, ts, kind, detail),
+            )
+            self._conn.commit()
+
+    def ops_events(
+        self, run_id: str, since: float = 0.0, kinds: Sequence[str] | None = None
+    ) -> list[dict[str, Any]]:
+        sql = "SELECT ts, kind, detail FROM ops_events WHERE run_id=? AND ts>=?"
+        args: list[Any] = [run_id, since]
+        if kinds:
+            sql += f" AND kind IN ({','.join('?' * len(kinds))})"
+            args.extend(kinds)
+        with self._lock:
+            rows = self._conn.execute(sql + " ORDER BY ts, id", args).fetchall()
+        return [dict(r) for r in rows]
 
     # ------------------------------------------------------------------ queries
     def round_trips(
@@ -285,8 +322,8 @@ class SQLiteStore:
     def equity_curve(self, run_id: str, since: float | None = None) -> list[dict[str, Any]]:
         with self._lock:
             rows = self._conn.execute(
-                "SELECT ts, equity, cash, positions_value FROM equity WHERE run_id=? AND ts>=? "
-                "ORDER BY ts",
+                "SELECT ts, equity, cash, positions_value, buy_hold FROM equity "
+                "WHERE run_id=? AND ts>=? ORDER BY ts",
                 (run_id, since or 0.0),
             ).fetchall()
         return [dict(r) for r in rows]

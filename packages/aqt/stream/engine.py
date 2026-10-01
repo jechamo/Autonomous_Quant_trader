@@ -395,14 +395,20 @@ class StreamingEngine:
         cost = self.cfg.fees_round_trip_pct + f.spread_pct + 2 * self.cfg.expected_slippage_pct
         by_id = {s.strategy_id: s for s in self.strategies}
 
+        def swing(sid: str) -> bool:
+            s = by_id.get(sid)
+            return bool(s is not None and s.overnight)
+
         to_close = self.session.seconds_to_close(self.now)
-        if to_close <= self.cfg.flatten_before_close_s:  # intraday only: never hold overnight
-            for (_, sym), vt in self._shadow.items():
-                if sym == bar.symbol and vt.is_open and vt.exit_submitted_at is None:
+        if to_close <= self.cfg.flatten_before_close_s:  # intraday rules never hold overnight
+            for (sid, sym), vt in self._shadow.items():
+                open_intraday = vt.is_open and vt.exit_submitted_at is None and not swing(sid)
+                if sym == bar.symbol and open_intraday:
                     self._shadow_exit(vt, "session_end")
-            if pos is not None:
+            if pos is not None and not swing(pos.strategy_id):
                 self._request_exit(bar.symbol, "session_end")
-        can_enter = self.session.is_open(self.now) and to_close > self.cfg.no_entry_before_close_s
+        session_open = self.session.is_open(self.now)
+        late = to_close <= self.cfg.no_entry_before_close_s
 
         def wants_exit(sid: str) -> bool:
             s = by_id[sid]
@@ -425,8 +431,10 @@ class StreamingEngine:
         for sid in [s for s in self._retiring if not self._has_open(s)]:
             self._drop_strategy(sid)
         for strat in self.strategies:
-            if not can_enter:
+            if not session_open:
                 break
+            if late and not strat.overnight:
+                continue  # intraday: no new positions in the last minutes of the session
             if strat.strategy_id in self._retiring:
                 continue  # removed by the lab: manage open trades, take no new ones
             key = (strat.strategy_id, bar.symbol)
@@ -778,7 +786,9 @@ class StreamingEngine:
         self.equity_history.append((self.now, eq, self.buy_hold_equity))
         if self.store is not None:
             bal = self.broker.get_balance()
-            self.store.log_equity(self.cfg.run_id, self.now, eq, bal.cash, eq - bal.cash)
+            self.store.log_equity(
+                self.cfg.run_id, self.now, eq, bal.cash, eq - bal.cash, self.buy_hold_equity
+            )
 
     def _record_trip(self, rt: RoundTrip) -> None:
         (self.paper_log if rt.book == "paper" else self.shadow_log).appendleft(rt)

@@ -289,6 +289,29 @@ def load_alpaca_1m(
     return with_bvc(bars[(bars.index >= start) & (bars.index < end)].astype(float))
 
 
+def load_alpaca_bars(
+    symbol: str,
+    start_ms: int,
+    end_ms: int,
+    key: str,
+    secret: str,
+    timeframe: str = "1h",
+) -> pd.DataFrame:  # pragma: no cover - network
+    """Regular-session bars at ``timeframe`` built from the cached 1-minute bars.
+
+    Buckets are aligned to UTC clock boundaries like the live engine; BVC flow is estimated at
+    this timeframe, exactly as the live ``ResearchBarBook(bvc=True)`` does.
+    """
+    from aqt.stream.history import resample_bars
+    from aqt.stream.stocks import with_bvc
+
+    minute = load_alpaca_1m(symbol, start_ms, end_ms, key, secret)
+    if timeframe == "1min":
+        return minute
+    ohlcv = minute[["open", "high", "low", "close", "volume"]]
+    return with_bvc(resample_bars(ohlcv, timeframe))
+
+
 def stock_bar_loader(
     env: Mapping[str, str] | None = None,
 ) -> tuple[str, Callable[..., pd.DataFrame]]:

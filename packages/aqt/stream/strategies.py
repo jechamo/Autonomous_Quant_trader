@@ -46,6 +46,8 @@ class StreamStrategy(ABC):
     # Feature time scale for this strategy; None = the engine default. A 20-minute idea must not
     # be judged (or exited) on a 1-minute trend.
     features: FeatureParams | None = None
+    # Intraday by default: positions are closed before the session ends (US stocks).
+    overnight: bool | None = False
 
     @abstractmethod
     def entry(self, f: FeatureSnapshot) -> EntryIntent | None: ...

@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+from aqt.analyst.hypotheses import HypothesisStore
 from aqt.lab.registry import RuleRecord, RuleRegistry, RuleStatus
 from aqt.strategies.intraday import INTRADAY_CATALOG
 from aqt.stream.dsl_strategy import ResearchBarBook, rule_id_for
@@ -91,6 +92,12 @@ def test_lab_endpoints() -> None:
     with TestClient(create_app(rt)) as client:
         assert client.get("/api/research").json()["status"]["enabled"] is False  # every_s=0
         assert client.get("/api/state").json()["lab"]["rules"]["challenger"] == 0
+        assert client.get("/api/hypotheses").json() == []
+    HypothesisStore(store).add_invalid("bad_idea", "unknown features ['x']", "test-model")
+    with TestClient(create_app(rt)) as client:
+        (h,) = client.get("/api/research").json()["hypotheses"]
+        assert h["status"] == "invalid" and h["reason"].startswith("unknown features")
+        assert client.get("/api/hypotheses").json()[0]["name"] == "bad_idea"
     lab.state.enabled = True
     with TestClient(create_app(rt)) as client:
         assert client.post("/api/research/run").json() == {"started": True}
@@ -99,6 +106,7 @@ def test_lab_endpoints() -> None:
     with TestClient(create_app(plain)) as client:
         assert client.get("/api/research").json()["status"] == {"enabled": False}
         assert client.post("/api/research/run").status_code == 409
+        assert client.get("/api/hypotheses").json() == []
 
 
 def test_historical_feed_pause() -> None:
@@ -139,6 +147,7 @@ def test_simulate_learn_headless(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
         cli_module.app,
         ["simulate", "--symbols", SYM, "--hours", "4", "--learn", "--lab-days", "3",
          "--research-every", "2", "--workers", "1", "--families", "flow_momentum",
+         "--timeframes", "1min",
          "--headless", "--end", end.strftime("%Y-%m-%dT%H:%M:%S"),
          "--db", str(tmp_path / "sim.sqlite")],
     )  # fmt: skip

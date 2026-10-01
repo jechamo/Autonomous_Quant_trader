@@ -125,4 +125,11 @@ def resolve_strategy(
             return INTRADAY_CATALOG[name]
         except KeyError as exc:
             raise KeyError(f"Unknown intraday strategy {name!r}") from exc
+    if catalog == "swing":
+        from aqt.strategies.swing import SWING_CATALOG
+
+        try:
+            return SWING_CATALOG[name]
+        except KeyError as exc:
+            raise KeyError(f"Unknown swing strategy {name!r}") from exc
     raise KeyError(f"Unknown catalog {catalog!r}")

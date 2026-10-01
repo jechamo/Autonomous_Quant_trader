@@ -7,16 +7,16 @@ existen y que el resumen cuadra con las filas.
 
 **Leyenda:** ✅ hecho · 🟡 parcial · ⏳ pendiente · 🚫 excluido por diseño (y forzado en código)
 
-**Última actualización:** 2026-10-01 · Research Lab, acciones (Alpaca/Yahoo) y broker Alpaca paper
+**Última actualización:** 2026-10-01 · Búsqueda de ventaja (swing, multi-timeframe, entre valores), Analista IA y puerta a real
 
 <!-- summary:start -->
 | Estado | Requisitos |
 |---|---|
-| ✅ | 168 |
-| 🟡 | 30 |
-| ⏳ | 53 |
+| ✅ | 191 |
+| 🟡 | 32 |
+| ⏳ | 38 |
 | 🚫 | 7 |
-| **Total** | **258** |
+| **Total** | **268** |
 
 | Sección | ✅ | 🟡 | ⏳ | 🚫 | Total |
 |---|---|---|---|---|---|
@@ -29,26 +29,26 @@ existen y que el resumen cuadra con las filas.
 | §7 | 12 | 0 | 0 | 0 | 12 |
 | §8 | 3 | 0 | 0 | 0 | 3 |
 | §9 | 7 | 3 | 4 | 0 | 14 |
-| §10 | 9 | 0 | 8 | 7 | 24 |
-| §11 | 20 | 0 | 6 | 0 | 26 |
-| §12 | 20 | 4 | 1 | 0 | 25 |
+| §10 | 13 | 0 | 6 | 7 | 26 |
+| §11 | 23 | 1 | 3 | 0 | 27 |
+| §12 | 23 | 4 | 1 | 0 | 28 |
 | §13 | 6 | 0 | 0 | 0 | 6 |
-| §14 | 4 | 1 | 1 | 0 | 6 |
+| §14 | 5 | 0 | 1 | 0 | 6 |
 | §15 | 0 | 2 | 2 | 0 | 4 |
 | §16 | 1 | 1 | 0 | 0 | 2 |
 | §17 | 18 | 1 | 0 | 0 | 19 |
 | §18 | 4 | 1 | 0 | 0 | 5 |
-| §19 | 0 | 2 | 4 | 0 | 6 |
+| §19 | 6 | 2 | 0 | 0 | 8 |
 | §20 | 6 | 1 | 0 | 0 | 7 |
-| §21 | 16 | 0 | 5 | 0 | 21 |
+| §21 | 17 | 0 | 5 | 0 | 22 |
 | §22 | 2 | 0 | 0 | 0 | 2 |
 | §23 | 2 | 0 | 1 | 0 | 3 |
 | §25 | 2 | 1 | 0 | 0 | 3 |
 | §26 | 4 | 0 | 2 | 0 | 6 |
 | §28 | 0 | 0 | 2 | 0 | 2 |
 | §29 | 2 | 0 | 7 | 0 | 9 |
-| §30 | 6 | 8 | 4 | 0 | 18 |
-| §31 | 4 | 2 | 4 | 0 | 10 |
+| §30 | 7 | 9 | 2 | 0 | 18 |
+| §31 | 8 | 3 | 0 | 0 | 11 |
 | §32 | 1 | 0 | 0 | 0 | 1 |
 | §33 | 1 | 0 | 0 | 0 | 1 |
 | §34 | 0 | 1 | 0 | 0 | 1 |
@@ -153,9 +153,9 @@ existen y que el resumen cuadra con las filas.
 | R10.05 | Breakouts | ✅ | `packages/aqt/strategies/catalog.py::CATALOG` | `tests/test_dsl.py::test_catalog_renders_on_features` | — |
 | R10.06 | Volatility | ✅ | `packages/aqt/strategies/intraday.py::INTRADAY_CATALOG` | `tests/test_dsl_stream.py::test_every_intraday_rule_renders_on_research_features` | Familia intradía `squeeze_breakout` (ATR bajo + ruptura con volumen); diario pendiente |
 | R10.07 | Volume | ✅ | `packages/aqt/strategies/intraday.py::INTRADAY_CATALOG` | `tests/test_dsl_stream.py::test_every_intraday_rule_renders_on_research_features` | Flujo de órdenes (`flow_imbalance_*`) y `volume_ratio` en reglas intradía |
-| R10.08 | Relative strength | ⏳ | — | — | Requiere multi-símbolo (R11.19) |
-| R10.09 | Pairs | ⏳ | — | — | Requiere multi-símbolo |
-| R10.10 | Cross-sectional signals | ⏳ | — | — | Requiere multi-símbolo |
+| R10.08 | Relative strength | ✅ | `packages/aqt/strategies/swing.py::SWING_CATALOG` | `tests/test_swing.py::test_swing_catalog_renders_on_augmented_features` | Familia `relative_strength` (retorno a 20 barras frente a la mediana del universo) |
+| R10.09 | Pairs | ⏳ | — | — | El panel multi-símbolo ya existe (R11.19); falta la familia de pares |
+| R10.10 | Cross-sectional signals | ✅ | `packages/aqt/features/cross_section.py::cross_sectional_features`, `packages/aqt/strategies/swing.py::SWING_CATALOG` | `tests/test_swing.py::test_cross_sectional_ranks_are_lagged_and_causal`, `tests/test_swing.py::test_multi_timeframe_cycle_finds_a_cross_sectional_leader` | Familias `xs_momentum`, `xs_momentum_long`, `xs_reversal`, `breadth_dip`; rangos retrasados una barra del panel |
 | R10.11 | Market regime | ⏳ | `packages/aqt/regime/classifier.py::RegimeClassifier` | — | Features de régimen disponibles; falta familia que opere con ellas |
 | R10.12 | Multi-factor | ⏳ | — | — | — |
 | R10.13 | ML classifiers | ⏳ | — | — | — |
@@ -167,9 +167,11 @@ existen y que el resumen cuadra con las filas.
 | R10.19 | Sin apalancamiento | 🚫 | `packages/aqt/risk/profile.py::AbsoluteLimits` | `tests/test_risk.py::test_manual_profile_cannot_breach_absolute_limits` | `max_portfolio_exposure ≤ 1.0` |
 | R10.20 | Sin short selling | 🚫 | `packages/aqt/risk/engine.py::RiskEngine` | `tests/test_risk.py::test_sell_exits_allowed_shorts_forbidden` | Además backtester long-only y `SimulatedBroker` rechaza cortos |
 | R10.21 | Sin Reinforcement Learning con dinero real | 🚫 | — | — | No existe ningún componente RL |
-| R10.22 | Sin decisiones directas de LLM | 🚫 | `services/ai_analyst/README.md` | — | Ningún módulo de `packages/aqt` importa un cliente LLM |
+| R10.22 | Sin decisiones directas de LLM | 🚫 | `packages/aqt/analyst/hypotheses.py::run_analyst` | `tests/test_analyst.py::test_analyst_package_cannot_import_brokers_risk_or_the_engine` | El único cliente LLM vive en `packages/aqt/analyst`, que no importa brokers, riesgo, motor ni servicios (test AST + `sys.modules`); sólo propone hipótesis que el lab examina |
 | R10.23 | Estrategias intradía de alta rotación en streaming (momentum de flujo de órdenes, reversión) a varios horizontes | ✅ | `packages/aqt/stream/strategies.py::default_stream_strategies` | `tests/test_stream.py::test_momentum_entry_and_cost_gate` | Petición del usuario (2026-10-01): bot rápido y dinámico. Horizontes 1–20 min; FDR entre todas |
 | R10.24 | Catálogo intradía para el Research Lab (7 familias, cientos de variantes) | ✅ | `packages/aqt/strategies/intraday.py::INTRADAY_CATALOG` | `tests/test_dsl_stream.py::test_every_intraday_rule_renders_on_research_features` | Mismo DSL que el research diario; objetivos amplios para que la búsqueda encuentre horizontes que paguen comisiones |
+| R10.25 | Catálogo swing (≥ 1 h) con familias de base académica | ✅ | `packages/aqt/strategies/swing.py::SWING_CATALOG` | `tests/test_swing.py::test_swing_catalog_renders_on_augmented_features` | 7 familias (~72 variantes): momentum y reversión entre valores, fuerza relativa, tendencia, ruptura con volumen, amplitud |
+| R10.26 | Hipótesis del Analista IA como familia examinada por el lab | ✅ | `packages/aqt/lab/cycle.py::run_research_cycle` | `tests/test_analyst.py::test_cycle_tests_pending_ai_hypotheses_in_the_global_fdr` | Familia `ai_*`; mismas pruebas (OOS, walk-forward, Monte Carlo, golden check) y el mismo FDR |
 
 ## §11 Feature Engine
 
@@ -189,11 +191,11 @@ existen y que el resumen cuadra con las filas.
 | R11.12 | Aceleración | ✅ | `packages/aqt/features/engine.py::FeatureEngine` | `tests/test_indicators.py::test_feature_engine_columns` | — |
 | R11.13 | Fuerza de tendencia | ✅ | `packages/aqt/indicators/core.py::trend_strength` | `tests/test_indicators.py::test_bollinger_and_trend` | t-stat de la pendiente |
 | R11.14 | Drawdown | ✅ | `packages/aqt/indicators/core.py::rolling_drawdown` | `tests/test_indicators.py::test_feature_engine_columns` | — |
-| R11.15 | Market breadth | ⏳ | — | — | Requiere universo multi-símbolo |
-| R11.16 | Correlación | ⏳ | — | — | Requiere benchmark |
-| R11.17 | Beta | ⏳ | — | — | Requiere benchmark |
-| R11.18 | Relative strength | ⏳ | — | — | Requiere benchmark |
-| R11.19 | Soporte multi-símbolo / benchmark en el Feature Engine | ⏳ | — | — | Prerrequisito de R11.15–R11.18 y R10.08–R10.10 |
+| R11.15 | Market breadth | ✅ | `packages/aqt/features/cross_section.py::cross_sectional_features` | `tests/test_swing.py::test_cross_sectional_ranks_are_lagged_and_causal` | `xs_breadth`: % del universo sobre su EMA-50, retrasado una barra |
+| R11.16 | Correlación | ⏳ | — | — | Panel multi-símbolo disponible (R11.19); falta benchmark |
+| R11.17 | Beta | ⏳ | — | — | Panel multi-símbolo disponible (R11.19); falta benchmark |
+| R11.18 | Relative strength | 🟡 | `packages/aqt/features/cross_section.py::cross_sectional_features` | `tests/test_swing.py::test_cross_sectional_ranks_are_lagged_and_causal` | `xs_rel_ret_20` frente a la mediana del universo y `xs_rank_ret_*`; frente a un índice benchmark pendiente |
+| R11.19 | Soporte multi-símbolo / benchmark en el Feature Engine | ✅ | `packages/aqt/features/cross_section.py::augment`, `packages/aqt/stream/dsl_strategy.py::ResearchBarBook` | `tests/test_swing.py::test_calendar_features_and_passthrough`, `tests/test_swing.py::test_live_cross_sectional_rule_matches_research` | El `FeatureEngine` deja pasar `xs_*` y calendario; en vivo el panel se recalcula con todas las series del timeframe |
 | R11.20 | Régimen de mercado como feature | ✅ | `packages/aqt/regime/classifier.py::RegimeClassifier` | `tests/test_indicators.py::test_feature_engine_columns` | tendencia × volatilidad |
 | R11.21 | Geometría de velas (body, sombras, body/range, close_position) | ✅ | `packages/aqt/indicators/core.py::candle_geometry` | `tests/test_indicators.py::test_candle_geometry_ranges` | — |
 | R11.22 | Patrones con nombre derivados de la geometría | ✅ | `packages/aqt/features/engine.py::candlestick_patterns` | `tests/test_dsl.py::test_catalog_renders_on_features` | engulfing, hammer, shooting star, doji |
@@ -201,6 +203,7 @@ existen y que el resumen cuadra con las filas.
 | R11.24 | Features causales (sin look-ahead) | ✅ | `packages/aqt/features/engine.py::FeatureEngine` | `tests/test_indicators.py::test_features_have_no_look_ahead` | — |
 | R11.25 | Desequilibrio de flujo de órdenes (taker buy) como feature | ✅ | `packages/aqt/features/engine.py::FeatureEngine` | `tests/test_dsl_stream.py::test_flow_features_are_causal` | `flow_imbalance_5/15` cuando hay `taker_buy_volume` (Binance) |
 | R11.26 | Flujo estimado para acciones (Bulk Volume Classification) | ✅ | `packages/aqt/stream/stocks.py::bvc_taker_buy` | `tests/test_stocks.py::test_bvc_flow_estimate` | Misma estimación en research y en vivo (`ResearchBarBook(bvc=True)`) |
+| R11.27 | Features de calendario (hora, día, minutos al cierre) | ✅ | `packages/aqt/features/cross_section.py::calendar_features` | `tests/test_swing.py::test_calendar_features_and_passthrough` | `minutes_to_close` sólo en acciones (sesión de NY) |
 
 ## §12 Statistical Engine
 
@@ -231,6 +234,9 @@ existen y que el resumen cuadra con las filas.
 | R12.23 | Comprobación golden: la regla validada debe ganar también en el motor real | ✅ | `packages/aqt/lab/cycle.py::golden_check` | `tests/test_lab.py::test_cycle_discovers_planted_edge_and_ignores_noise` | Replay del periodo fuera de muestra con latencia, bid/ask y comisiones |
 | R12.24 | Research masivo en paralelo | ✅ | `packages/aqt/research/study.py::run_study` | `tests/test_lab.py::test_cycle_discovers_planted_edge_and_ignores_noise` | `workers` procesos; FDR global idéntico al secuencial. Real: 1.790 hipótesis (10 símbolos × 7 días) en ~7 min |
 | R12.25 | Meta-labeling validado sin fugas | ✅ | `packages/aqt/lab/meta.py::train_meta_filter` | `tests/test_meta.py::test_meta_filter_refuses_noise_and_small_samples` | Purged K-fold, Bonferroni sobre umbrales; excluye niveles de precio y reloj |
+| R12.26 | Research multi-timeframe con un único FDR global | ✅ | `packages/aqt/research/study.py::apply_global_fdr`, `packages/aqt/lab/cycle.py::run_research_cycle` | `tests/test_swing.py::test_multi_timeframe_cycle_finds_a_cross_sectional_leader` | Cripto 1min/1h/4h, acciones 15min/1h; todas las hipótesis de todos los timeframes cuentan en el mismo BH |
+| R12.27 | Swing: reglas ≥ 1 h mantienen posiciones entre sesiones | ✅ | `packages/aqt/stream/engine.py::StreamingEngine`, `packages/aqt/stream/dsl_strategy.py::DslStreamStrategy` | `tests/test_swing.py::test_swing_positions_survive_the_close_intraday_ones_do_not` | Las intradía se cierran antes del cierre; las swing no, y sólo entran con mercado abierto |
+| R12.28 | Paridad research ↔ vivo de las features entre valores | ✅ | `packages/aqt/stream/dsl_strategy.py::ResearchBarBook` | `tests/test_swing.py::test_live_cross_sectional_rule_matches_research` | El libro reconstruye el panel con todas las series del timeframe; mismas entradas que el research |
 
 ## §13 Bayesian Evidence Engine
 
@@ -248,7 +254,7 @@ existen y que el resumen cuadra con las filas.
 | ID | Requisito | Estado | Implementación | Tests | Falta / notas |
 |---|---|---|---|---|---|
 | R14.01 | Estados Champion / Challenger | ✅ | `packages/aqt/lab/registry.py::RuleStatus` | `tests/test_lab.py::test_review_retires_losers_and_promotes_winners` | Registro local: candidate → challenger → champion → retired; la tabla Supabase `strategies.status` queda para el despliegue |
-| R14.02 | La IA no despliega cambios directamente | 🟡 | `packages/aqt/lab/learning.py::learn_meta_filters` | `tests/test_meta.py::test_learning_registers_filtered_versions_of_baseline_strategies` | El ML sólo crea *nuevas versiones* challenger que deben ganar evidencia forward; el AI Analyst (LLM) sigue pendiente |
+| R14.02 | La IA no despliega cambios directamente | ✅ | `packages/aqt/lab/learning.py::learn_meta_filters`, `packages/aqt/lab/cycle.py::run_research_cycle` | `tests/test_meta.py::test_learning_registers_filtered_versions_of_baseline_strategies`, `tests/test_analyst.py::test_cycle_tests_pending_ai_hypotheses_in_the_global_fdr` | El ML sólo crea versiones challenger y las hipótesis de la IA sólo entran como candidatas del lab; ambas deben ganarse la promoción con evidencia forward |
 | R14.03 | Pipeline Backtest → OOS → WF → costes | ✅ | `packages/aqt/research/pipeline.py::run_research` | `tests/test_research.py::test_pipeline_is_reproducible` | Veredicto `CHALLENGER_CANDIDATE` |
 | R14.04 | Paper trading antes de promoción | ✅ | `packages/aqt/lab/review.py::review_rules` | `tests/test_lab.py::test_review_retires_losers_and_promotes_winners` | Una regla del lab sólo pasa a champion (y a operar en paper) cuando su evidencia forward en sombra supera los umbrales del Risk Engine |
 | R14.05 | Comparación con el Champion | ⏳ | — | — | — |
@@ -308,12 +314,14 @@ existen y que el resumen cuadra con las filas.
 
 | ID | Requisito | Estado | Implementación | Tests | Falta / notas |
 |---|---|---|---|---|---|
-| R19.01 | El LLM nunca envía órdenes | 🟡 | `services/ai_analyst/README.md` | — | Por diseño; forzar con credenciales/roles separados al implementarlo |
-| R19.02 | Análisis de operaciones, errores, régimen, anomalías, degradación | ⏳ | — | — | Iteración 3 |
-| R19.03 | Generación de hipótesis y Challengers | ⏳ | — | — | — |
-| R19.04 | Literatura, noticias, macro, lecciones | ⏳ | — | — | — |
-| R19.05 | Salida estructurada | 🟡 | `supabase/migrations/20261001000000_initial_schema.sql` | — | Tablas `ai_reviews`, `ai_hypotheses`, `lessons` |
-| R19.06 | El Research Engine confirma o rechaza las hipótesis | ⏳ | — | — | — |
+| R19.01 | El LLM nunca envía órdenes | ✅ | `packages/aqt/analyst/hypotheses.py::run_analyst` | `tests/test_analyst.py::test_analyst_package_cannot_import_brokers_risk_or_the_engine` | Sin imports de brokers/riesgo/motor/servicios, ni directos ni transitivos; nunca ve claves de broker (sólo `OPENAI_API_KEY`) |
+| R19.02 | Análisis de operaciones, errores, régimen, anomalías, degradación | 🟡 | `packages/aqt/analyst/hypotheses.py::build_context` | `tests/test_analyst.py::test_run_analyst_stores_valid_rejects_invalid_and_dedupes` | Lee lecciones, checks que fallan, mejores pares, evidencia forward y sus hipótesis previas; falta análisis de operaciones y anomalías |
+| R19.03 | Generación de hipótesis y Challengers | ✅ | `packages/aqt/analyst/hypotheses.py::run_analyst` | `tests/test_analyst.py::test_run_analyst_stores_valid_rejects_invalid_and_dedupes` | Hipótesis en el DSL (familia `ai`) con grid ≤ 8 variantes; tabla `hypotheses` en SQLite |
+| R19.04 | Literatura, noticias, macro, lecciones | 🟡 | `packages/aqt/analyst/hypotheses.py::build_context` | — | Lecciones del lab sí; literatura, noticias y macro pendientes |
+| R19.05 | Salida estructurada | ✅ | `packages/aqt/analyst/hypotheses.py::validate_proposal` | `tests/test_analyst.py::test_invalid_proposals_are_rejected_with_a_reason` | JSON mode + validación estricta (Claim / Evidence / Suggested experiment + regla DSL); lo inválido se guarda con motivo. Tablas Supabase `ai_hypotheses` sin sincronizar aún |
+| R19.06 | El Research Engine confirma o rechaza las hipótesis | ✅ | `packages/aqt/lab/cycle.py::run_research_cycle` | `tests/test_analyst.py::test_cycle_tests_pending_ai_hypotheses_in_the_global_fdr` | Las hipótesis pendientes se examinan en el mismo FDR global; veredicto (`promoted`/`rejected`, checks que fallan) vuelve al analista |
+| R19.07 | Límites de coste del analista: presupuesto diario, deduplicación | ✅ | `packages/aqt/analyst/hypotheses.py::run_analyst` | `tests/test_analyst.py::test_run_analyst_respects_the_daily_budget_and_api_errors` | Máx. 6 llamadas/día por defecto; duplicados por contenido de la regla (no por nombre); errores de la API no rompen el ciclo |
+| R19.08 | Panel «Analista IA» en el dashboard con el veredicto del lab | ✅ | `services/trader/app.py::create_app`, `services/trader/lab_scheduler.py::LabScheduler` | `tests/test_lab_service.py::test_lab_endpoints` | `GET /api/hypotheses` y `hypotheses` en `/api/research` |
 
 ## §20 Memoria (Supabase)
 
@@ -355,6 +363,7 @@ lectura para `authenticated`, sin acceso `anon` y escritura sólo vía `service_
 | R21.19 | Historia intradía de acciones (Yahoo sin clave, Alpaca con clave) | ✅ | `packages/aqt/stream/stocks.py::parse_yahoo_chart`, `packages/aqt/stream/alpaca.py::parse_alpaca_bars` | `tests/test_stocks.py::test_parse_yahoo_chart` | Yahoo ~7 días de velas de 1 min; Alpaca años (sesión regular) |
 | R21.20 | Investigación y simulación de acciones | ✅ | `packages/aqt/lab/cycle.py::BarData`, `services/trader/cli.py::simulate` | `tests/test_stocks.py::test_lab_cycle_runs_on_stock_bars` | `--market stocks` en `research`, `simulate` y `run` |
 | R21.21 | Broker Alpaca **paper**: órdenes reales a la cuenta simulada, subcuenta de capital, sin margen | ✅ | `packages/aqt/brokers/alpaca_paper.py::AlpacaPaperBroker` | `tests/test_alpaca_paper.py::test_orders_are_routed_filled_and_reconciled` | `run --market stocks --broker alpaca --cash N`; sólo `paper-api.alpaca.markets` (cualquier otro host se rechaza); toda orden sigue pasando por el Risk Engine |
+| R21.22 | Historia larga a varias escalas (klines Binance, barras Alpaca remuestreadas) | ✅ | `packages/aqt/stream/history.py::load_binance_klines`, `packages/aqt/stream/alpaca.py::load_alpaca_bars` | `tests/test_swing.py::test_resample_and_kline_rows` | Caché mensual en Parquet; barras alineadas a fronteras UTC; BVC al timeframe |
 | R22.01 | El núcleo no se implementa en Lovable | ✅ | `apps/dashboard/README.md` | — | — |
 | R22.02 | El frontend nunca tiene claves del broker | ✅ | `.env.example` | — | Sólo backend; dashboard usa anon key + Auth |
 
@@ -405,14 +414,14 @@ lectura para `authenticated`, sin acceso `anon` y escritura sólo vía `service_
 | R30.08 | Paso 8 — BrokerAdapter + Trading212Broker | 🟡 | `packages/aqt/brokers/base.py::BrokerAdapter` | `tests/test_brokers.py::test_simulated_buy_sell_cycle` | Interfaz ✅; implementación T212 ⏳ |
 | R30.09 | Paso 9 — Paper Trader | 🟡 | `packages/aqt/brokers/alpaca_paper.py::AlpacaPaperBroker`, `services/trader/cli.py::run` | `tests/test_alpaca_paper.py::test_engine_trades_through_alpaca_paper` | Paper con fills locales (Binance/acciones) y paper contra un broker real (Alpaca paper: órdenes enviadas y fills del broker) ✅; Trading 212 Demo ⏳ |
 | R30.10 | Paso 10 — Shadow Engine | 🟡 | `packages/aqt/stream/engine.py::StreamingEngine` | `tests/test_stream.py::test_engine_without_evidence_trades_only_in_shadow` | Libro en sombra por estrategia; faltan Buy & Hold / Cash (R15.02–R15.03) |
-| R30.11 | Paso 11 — AI Analyst | ⏳ | — | — | Iteración 3 |
+| R30.11 | Paso 11 — AI Analyst | ✅ | `packages/aqt/analyst/client.py::OpenAIClient`, `services/trader/cli.py::analyst` | `tests/test_analyst.py::test_analyst_cli_dry_run_off_and_mocked_call` | Local: `python -m services.trader analyst` o antes de cada ciclo de research (cada 6 h con el lab); presupuesto diario de llamadas |
 | R30.12 | Paso 12 — Autonomous Research Loop | 🟡 | `packages/aqt/lab/cycle.py::run_research_cycle`, `services/trader/lab_scheduler.py::LabScheduler` | `tests/test_lab.py::test_cycle_discovers_planted_edge_and_ignores_noise` | Bucle local completo (research → golden → challenger → review → meta-learning); Railway pendiente |
 | R30.13 | Paso 13 — Dashboard | 🟡 | `apps/dashboard/local/index.html`, `services/trader/app.py::create_app` | `tests/test_trader_service.py::test_api_state_control_and_persistence` | Dashboard local en localhost ✅; versión Lovable/Vercel ⏳ |
 | R30.14 | Paso 14 — Deploy | ⏳ | — | — | — |
 | R30.15 | Paso 15 — Seguridad: entornos y doble flag LIVE | ✅ | `packages/aqt/common/config.py::load_settings` | `tests/test_config.py::test_live_requires_both_flags` | — |
 | R30.16 | Paso 15 — Claves distintas por entorno | 🟡 | `.env.example` | — | Variables separadas demo/live; falta gestor de secretos |
 | R30.17 | Paso 15 — Global kill switch en dashboard | ✅ | `services/trader/app.py::create_app`, `services/trader/runtime.py::TraderRuntime` | `tests/test_trader_service.py::test_api_state_control_and_persistence` | Local: botón en el dashboard, leído por el trader y persistido; columna Supabase auditada para la versión desplegada |
-| R30.18 | Paso 16 — Go-live gate | ⏳ | — | — | Ver §31 |
+| R30.18 | Paso 16 — Go-live gate | 🟡 | `packages/aqt/stream/golive.py::evaluate_gate`, `services/trader/golive_monitor.py::GoLiveMonitor` | `tests/test_golive.py::test_gate_passes_with_a_month_of_consistent_beating_paper` | Puerta automática con aviso; falta el adaptador de broker real (nada pasa a LIVE solo) |
 
 ## §31 Go-live gate y configuración LIVE inicial
 
@@ -422,12 +431,13 @@ lectura para `authenticated`, sin acceso `anon` y escritura sólo vía `service_
 | R31.02 | EV positivo después de costes | ✅ | `packages/aqt/research/pipeline.py::run_research` | `tests/test_research.py::test_pipeline_is_reproducible` | Ídem |
 | R31.03 | Drawdown dentro del límite | ✅ | `packages/aqt/research/pipeline.py::run_research` | `tests/test_research.py::test_pipeline_is_reproducible` | Check `drawdown_within_limit` (Monte Carlo) |
 | R31.04 | Estabilidad por régimen | 🟡 | `packages/aqt/statistics/regimes.py::metrics_by_regime` | — | Se reporta; aún no es criterio del veredicto |
-| R31.05 | Paper trading consistente | ⏳ | — | — | — |
-| R31.06 | Ausencia de errores de reconciliación | ⏳ | — | — | — |
-| R31.07 | Kill switch probado end-to-end | 🟡 | `packages/aqt/stream/engine.py::StreamingEngine` | `tests/test_stream.py::test_kill_switch_pause_and_throttle_block_entries` | Probado con el exchange paper; falta con broker real |
-| R31.08 | Recuperación del broker probada | ⏳ | — | — | — |
-| R31.09 | Gate automatizado (checklist ejecutable) | ⏳ | — | — | — |
+| R31.05 | Paper trading consistente | ✅ | `packages/aqt/stream/golive.py::evaluate_gate` | `tests/test_golive.py::test_gate_names_what_is_missing` | ≥ 28 días, ≥ 50 operaciones, neto > 0, t-test p < 0,05, ≥ 3 de 4 semanas positivas, mejor que Buy & Hold, caída ≤ límite del perfil |
+| R31.06 | Ausencia de errores de reconciliación | ✅ | `services/trader/golive_monitor.py::GoLiveMonitor` | `tests/test_golive.py::test_monitor_records_incidents_and_notifies_once_per_flip` | Descuadres que persisten dos muestras (15 s) quedan en `ops_events`; la puerta exige 0 y un broker externo (Alpaca paper) |
+| R31.07 | Kill switch probado end-to-end | 🟡 | `packages/aqt/stream/engine.py::StreamingEngine`, `services/trader/runtime.py::TraderRuntime` | `tests/test_stream.py::test_kill_switch_pause_and_throttle_block_entries`, `tests/test_golive.py::test_runtime_api_kill_switch_events_and_loop` | Activar/desactivar queda auditado y la puerta exige haberlo probado en la cuenta paper; falta con broker real |
+| R31.08 | Recuperación del broker probada | 🟡 | `services/trader/golive_monitor.py::GoLiveMonitor` | `tests/test_golive.py::test_monitor_records_incidents_and_notifies_once_per_flip` | Caídas y recuperaciones del broker se registran (`broker_down`/`broker_recovered`); falta un simulacro forzado |
+| R31.09 | Gate automatizado (checklist ejecutable) | ✅ | `packages/aqt/stream/golive.py::evaluate_gate`, `apps/dashboard/local/index.html` | `tests/test_golive.py::test_gate_passes_with_a_month_of_consistent_beating_paper`, `tests/test_golive.py::test_runtime_api_kill_switch_events_and_loop` | 10 criterios evaluados cada hora; panel «Puerta a real» y `GET /api/golive` |
 | R31.10 | Config LIVE inicial: 100 €, límites estrictos, pocas posiciones | ✅ | `packages/aqt/risk/profile.py::RiskProfile` | `tests/test_risk.py::test_small_account_100_eur` | `configuration.aggressiveness` por defecto 20 |
+| R31.11 | Aviso al operador cuando la puerta cambia de estado | ✅ | `services/trader/notify.py::make_notifier`, `services/trader/golive_monitor.py::GoLiveMonitor` | `tests/test_golive.py::test_notifier_ntfy_json_and_failures`, `tests/test_golive.py::test_monitor_records_incidents_and_notifies_once_per_flip` | Un aviso por cambio (listo / ya no listo): banner en el dashboard, log y webhook opcional `NOTIFY_WEBHOOK_URL` (ntfy al móvil, Slack, Discord) |
 
 ## §32–34 Escalabilidad, métrica y objetivo final
 

@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 from aqt.common.types import validate_ohlcv
+from aqt.features.cross_section import CALENDAR_COLUMNS, PASSTHROUGH_PREFIXES
 from aqt.indicators import (
     atr,
     bollinger_position,
@@ -107,9 +108,12 @@ class FeatureEngine:
                 vol = df["volume"].rolling(n, min_periods=n).sum().replace(0.0, np.nan)
                 feats[f"flow_imbalance_{n}"] = signed.rolling(n, min_periods=n).sum() / vol
 
+        extra = [
+            c for c in df.columns if c.startswith(PASSTHROUGH_PREFIXES) or c in CALENDAR_COLUMNS
+        ]
         out = pd.concat(
             [
-                df[["open", "high", "low", "close", "volume"]],
+                df[["open", "high", "low", "close", "volume", *extra]],
                 pd.DataFrame(feats, index=df.index),
                 macd(close),
                 candle_geometry(df),

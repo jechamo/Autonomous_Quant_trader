@@ -406,6 +406,22 @@ async function renderLab() {
   $("lab-lessons").innerHTML = (lab.lessons || []).map((l) => `<li>
     <span class="muted">${time(l.ts)} · ${esc(l.kind)}</span><span class="why">${esc(l.text)}</span></li>`).join("")
     || `<li class="muted">Las lecciones aparecen tras cada ciclo, promoción o retirada.</li>`;
+  const HYP_ES = { proposed: "pendiente", promoted: "promovida", rejected: "rechazada", invalid: "inválida" };
+  $("ai-hyps").querySelector("tbody").innerHTML = (lab.hypotheses || []).map((h) => {
+    const v = h.verdict || {};
+    let res = "—";
+    if (h.status === "invalid") res = esc(h.reason || "");
+    else if (v.symbols_tested != null) {
+      const fails = Object.keys(v.failed_checks || {}).slice(0, 2).join(", ");
+      res = `${v.symbols_tested} símbolos · mejor ${esc(v.best_symbol || "—")} ${v.best_oos_ev != null ? pct(v.best_oos_ev, 3) : ""}`
+        + ` (${v.best_oos_trades ?? 0} op.) · candidatas ${v.candidates}${fails ? " · falla: " + esc(fails) : ""}`;
+    } else if (h.status === "proposed") res = "se examinará en el próximo ciclo";
+    return `<tr><td>${new Date(h.created_at * 1000).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" })}</td>
+      <td>${esc(h.name)}</td><td>${esc(h.timeframe || "—")}</td>
+      <td>${esc((h.claim || "").slice(0, 220))}</td>
+      <td><span class="pill ${esc(h.status)}">${HYP_ES[h.status] || esc(h.status)}</span></td>
+      <td class="muted">${res}</td></tr>`;
+  }).join("") || `<tr><td colspan="6" class="muted">Sin hipótesis todavía. El analista propone ideas antes de cada ciclo de research si OPENAI_API_KEY y un modelo están en .env.</td></tr>`;
   $("lab-runs").querySelector("tbody").innerHTML = (lab.runs || []).map((r) => {
     const s = r.summary || {};
     return `<tr><td>${r.id}</td><td>${new Date(r.started_at * 1000).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" })}</td>
@@ -421,3 +437,33 @@ $("lab-run").onclick = async () => {
 };
 renderLab();
 setInterval(renderLab, 5000);
+
+async function renderGoLive() {
+  let g;
+  try {
+    g = await (await fetch("/api/golive")).json();
+  } catch { return; }
+  const panel = $("golive-panel");
+  const banner = $("golive-banner");
+  if (!g.enabled) {
+    panel.classList.add("hidden");
+    banner.className = "banner ready hidden";
+    return;
+  }
+  panel.classList.remove("hidden");
+  const when = g.evaluated_at ? new Date(g.evaluated_at * 1000).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" }) : "—";
+  $("golive-status").innerHTML = (g.ready
+    ? `<span class="gate-ok">LISTO PARA REAL</span>`
+    : `<span class="gate-no">Aún no</span>`) + ` · ${g.passed}/${g.total} criterios · evaluado ${when}`;
+  $("golive-table").querySelector("tbody").innerHTML = (g.criteria || []).map((c) => `<tr>
+      <td class="${c.ok ? "gate-ok" : "gate-no"}">${c.ok ? "✓" : "✗"}</td>
+      <td>${esc(c.label)}</td><td>${esc(c.value)}</td><td class="muted">${esc(c.target)}</td>
+      <td class="muted">${esc(c.detail || "")}</td></tr>`).join("");
+  if (g.ready) {
+    banner.textContent = "✓ La cuenta paper ha superado la puerta a real (" + g.passed + "/" + g.total + ")."
+      + (g.live_broker_available ? " Puedes plantearte pasar a real." : " Siguiente paso: construir el conector real del broker; nada se activa solo.");
+    banner.className = "banner ready";
+  } else banner.className = "banner ready hidden";
+}
+renderGoLive();
+setInterval(renderGoLive, 60000);

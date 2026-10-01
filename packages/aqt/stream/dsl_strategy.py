@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 
 import pandas as pd
 
+from aqt.features.cross_section import augment
 from aqt.features.engine import FeatureEngine
 from aqt.strategies.dsl import StrategySpec
 from aqt.stream.bars import Bar
@@ -41,10 +42,11 @@ class _Series:
 class ResearchBarBook:
     """Shared research bars + features per (symbol, timeframe); idempotent per engine bar."""
 
-    def __init__(self, window: int = 1000, bvc: bool = False) -> None:
+    def __init__(self, window: int = 1000, bvc: bool = False, session: str = "24/7") -> None:
         self.window = window
         # Stocks: estimate taker-buy volume with BVC from bar returns, as research does.
         self.bvc = bvc
+        self.session = session  # calendar features (minutes to the New York close for stocks)
         self._series: dict[tuple[str, float], _Series] = {}
         self._seen: dict[tuple[str, float], float] = {}
         self._fe = FeatureEngine()
@@ -58,12 +60,23 @@ class ResearchBarBook:
 
     def seed(self, symbol: str, timeframe: float, df: pd.DataFrame) -> None:
         """Pre-load completed research bars (e.g. recent REST klines) so rules need no warm-up."""
-        s = self.series(symbol, timeframe)
-        starts = [t.timestamp() for t in pd.DatetimeIndex(df.index)]
-        for start, row in zip(starts, df[_COLUMNS].to_numpy(dtype=float), strict=True):
-            o, h, lo, c, v, tb = (float(x) for x in row)
-            s.bars.append((float(start), o, h, lo, c, v, tb))
-        self._refresh(s)
+        self.seed_many(timeframe, {symbol: df})
+
+    def seed_many(self, timeframe: float, frames: dict[str, pd.DataFrame]) -> None:
+        """Pre-load several symbols, then compute features once with the complete panel.
+
+        Seeding is history, not a new bar: it does not advance ``final_seq``, so no rule acts on a
+        signal from a bar that closed before the trader started.
+        """
+        for symbol, df in frames.items():
+            s = self.series(symbol, timeframe)
+            cols = df.reindex(columns=_COLUMNS).fillna({"taker_buy_volume": 0.0})
+            starts = [t.timestamp() for t in pd.DatetimeIndex(df.index)]
+            for start, row in zip(starts, cols.to_numpy(dtype=float), strict=True):
+                o, h, lo, c, v, tb = (float(x) for x in row)
+                s.bars.append((float(start), o, h, lo, c, v, tb))
+        for symbol in frames:
+            self._refresh(symbol, timeframe, bump=False)
 
     def preload(self, symbol: str, timeframe: float, features: pd.DataFrame) -> None:
         """Replays only: features already computed causally over the whole history.
@@ -81,7 +94,11 @@ class ResearchBarBook:
         self._seen[key] = bar.start
         s = self.series(bar.symbol, timeframe)
         bucket = math.floor(bar.start / timeframe + 1e-9) * timeframe
-        if s.bucket is None or bucket != s.bucket:
+        if s.bucket is not None and bucket != s.bucket:
+            # A later bucket started before the boundary bar arrived (sparse data, e.g. a quiet
+            # market or an hourly replay): the open research bar is complete — close it first.
+            self._finalize(bar.symbol, timeframe, s)
+        if s.bucket is None:
             s.bucket = bucket
             s.agg = [bar.open, bar.high, bar.low, bar.close, bar.volume, bar.buy_volume]
         else:
@@ -92,21 +109,22 @@ class ResearchBarBook:
             a[4] += bar.volume
             a[5] += bar.buy_volume
         if bar.end >= bucket + timeframe - 1e-6:  # research bar complete
-            s.bars.append((bucket, *s.agg))  # type: ignore[arg-type]
-            s.bucket = None
-            pre = self._pre.get(key)
-            if pre is None:
-                self._refresh(s)
-            else:
-                pos = pre.index.searchsorted(pd.Timestamp(bucket, unit="s", tz="UTC"), side="right")
-                s.final_seq += 1
-                s.features = pre.iloc[max(pos - 2, 0) : pos] if pos else None
+            self._finalize(bar.symbol, timeframe, s)
 
-    def _refresh(self, s: _Series) -> None:
-        s.final_seq += 1
-        if len(s.bars) < 2:
-            s.features = None
-            return
+    def _finalize(self, symbol: str, timeframe: float, s: _Series) -> None:
+        assert s.bucket is not None
+        bucket = s.bucket
+        s.bars.append((bucket, *s.agg))  # type: ignore[arg-type]
+        s.bucket = None
+        pre = self._pre.get((symbol, timeframe))
+        if pre is None:
+            self._refresh(symbol, timeframe)
+        else:
+            pos = pre.index.searchsorted(pd.Timestamp(bucket, unit="s", tz="UTC"), side="right")
+            s.final_seq += 1
+            s.features = pre.iloc[max(pos - 2, 0) : pos] if pos else None
+
+    def _frame(self, s: _Series) -> pd.DataFrame:
         idx = pd.to_datetime([b[0] for b in s.bars], unit="s", utc=True)
         df = pd.DataFrame([b[1:] for b in s.bars], index=idx, columns=_COLUMNS)
         df = df[df["volume"] >= 0]
@@ -114,8 +132,24 @@ class ResearchBarBook:
             from aqt.stream.stocks import bvc_taker_buy
 
             df["taker_buy_volume"] = bvc_taker_buy(df)
+        return df
+
+    def _refresh(self, symbol: str, timeframe: float, bump: bool = True) -> None:
+        """Recompute ``symbol``'s features with the cross-sectional panel of every symbol at
+        this timeframe (the same :func:`augment` research uses)."""
+        s = self.series(symbol, timeframe)
+        if bump:
+            s.final_seq += 1
+        if len(s.bars) < 2:
+            s.features = None
+            return
+        frames = {
+            sym: self._frame(other)
+            for (sym, tf), other in self._series.items()
+            if tf == timeframe and len(other.bars) >= 2
+        }
         try:
-            s.features = self._fe.compute(df)
+            s.features = self._fe.compute(augment(frames, timeframe, self.session)[symbol])
         except ValueError:  # degenerate window (e.g. a non-positive price)
             s.features = None
 
@@ -131,10 +165,17 @@ def _row_context(row: pd.Series) -> dict[str, float]:
     return out
 
 
-def rule_id_for(spec: StrategySpec, symbol: str) -> str:
-    """Stable id of a rendered rule on a symbol (also its live ``strategy_id``)."""
+TIMEFRAME_LABELS = {60.0: "1min", 300.0: "5min", 900.0: "15min", 3600.0: "1h",
+                    14400.0: "4h", 86400.0: "1d"}  # fmt: skip
+
+
+def rule_id_for(spec: StrategySpec, symbol: str, timeframe_s: float = 60.0) -> str:
+    """Stable id of a rendered rule on a symbol and timeframe (also its live ``strategy_id``)."""
     rendered = spec.render()
-    return f"{rendered.family}:{symbol}:{rendered.config_hash()[:8]}"
+    rid = f"{rendered.family}:{symbol}:{rendered.config_hash()[:8]}"
+    if timeframe_s != 60.0:
+        rid += f"@{TIMEFRAME_LABELS.get(timeframe_s, f'{timeframe_s:g}s')}"
+    return rid
 
 
 @dataclass
@@ -147,14 +188,18 @@ class DslStreamStrategy(StreamStrategy):
     book: ResearchBarBook = field(default_factory=ResearchBarBook)
     min_cost_multiple: float = 0.0
     description: str = ""
+    # Swing rules (bars of 1 h or more) may hold positions overnight; intraday ones never do.
+    overnight: bool | None = None
 
     def __post_init__(self) -> None:
         self.spec = self.spec.render()
+        if self.overnight is None:
+            self.overnight = self.timeframe_s >= 3600
         if not self.strategy_id:
-            self.strategy_id = rule_id_for(self.spec, self.symbol)
+            self.strategy_id = rule_id_for(self.spec, self.symbol, self.timeframe_s)
         if not self.description:
             self.description = self.spec.description or self.spec.name
-        self._entry_seq = -1
+        self._entry_seq = 0  # a seeded book is at seq 0: wait for the first new bar
         self._exit_seq = -1
         self._exit_now = False
 
@@ -163,8 +208,8 @@ class DslStreamStrategy(StreamStrategy):
         return self.timeframe_s / self.engine_bar_s
 
     def on_bar(self, bar: Bar) -> None:
-        if bar.symbol == self.symbol:
-            self.book.on_bar(bar, self.timeframe_s)
+        # Every symbol feeds the book: cross-sectional features need the whole universe.
+        self.book.on_bar(bar, self.timeframe_s)
 
     def _last_row(self) -> tuple[pd.DataFrame, int] | None:
         s = self.book.series(self.symbol, self.timeframe_s)

@@ -92,8 +92,10 @@ evento ≥ `t+Δ`, y la orden se llena tras la latencia contra el libro de ese m
 Aprendizaje continuo sin LLM, todo validado estadísticamente:
 
 ```
-historia 1 s (Binance) / 1 min (Yahoo, Alpaca) ─► velas de research + flujo (taker / BVC)
-   ─► run_study(INTRADAY_CATALOG): IS → BH-FDR → OOS → walk-forward → MC → FDR global
+historia 1 s / klines (Binance), 1 min remuestreado (Alpaca, Yahoo) ─► velas por timeframe
+   + flujo (taker / BVC) + panel entre valores (xs_*) y calendario
+   ─► por timeframe: run_study(INTRADAY_CATALOG | SWING_CATALOG + hipótesis IA)
+      IS → BH-FDR → OOS → walk-forward → MC ─► un único FDR global sobre todos los timeframes
    ─► golden check en el StreamingEngine real ─► registro: candidate → CHALLENGER
    ─► sombra en vivo (evidencia forward) ─► review: CHAMPION (opera paper vía Risk Engine)
                                                     o RETIRED (+ lección)
@@ -109,6 +111,43 @@ historia 1 s (Binance) / 1 min (Yahoo, Alpaca) ─► velas de research + flujo 
   versionados con hash de integridad.
 - Acciones: sesión de EE. UU. (sin entradas en los últimos 15 min, cierre 5 min antes) y flujo
   estimado con Bulk Volume Classification tanto en research como en vivo.
+- Multi-timeframe: cada regla lleva su timeframe (`rule_id` con sufijo `@1h`, `@4h`…). Las de
+  ≥ 1 h son *swing*: no se cierran al final de la sesión y sólo entran con mercado abierto.
+- Features entre valores (`packages/aqt/features/cross_section.py`): rango del retorno de cada
+  símbolo en el universo, fuerza frente a la mediana y amplitud, todo retrasado una barra del
+  panel; en vivo `ResearchBarBook` recalcula el panel con todas las series de ese timeframe.
+
+### Analista IA (`packages/aqt/analyst`)
+Propone, no decide. Antes de cada ciclo de research (o con `python -m services.trader analyst`)
+lee la memoria del lab —lecciones, checks que fallan, mejores pares, evidencia forward y sus
+hipótesis anteriores con su veredicto— y pide a OpenAI (JSON mode) hipótesis en el DSL. Cada una
+se valida (features existentes, stop obligatorio, `max_holding_bars`, ≤ 8 variantes, timeframe
+permitido) y se guarda en `hypotheses`; el siguiente ciclo las examina como familia `ai_*` dentro
+del mismo FDR global y escribe el veredicto. El paquete no importa brokers, riesgo, motor ni
+servicios (test de imports directo y transitivo), sólo conoce `OPENAI_API_KEY` y tiene un
+presupuesto diario de llamadas.
+
+### Puerta a real (`packages/aqt/stream/golive.py`, `services/trader/golive_monitor.py`)
+Checklist ejecutable del go-live gate (§31) sobre la cuenta paper, evaluado cada hora por el
+trader y servido en `GET /api/golive`:
+
+| Criterio | Umbral |
+|---|---|
+| Tiempo en paper | ≥ 28 días |
+| Operaciones cerradas | ≥ 50 |
+| Resultado neto tras costes | > 0 |
+| Ventaja estadística | t-test de los retornos netos, p < 0,05 |
+| Semanas positivas | ≥ 3 de las últimas 4 |
+| Mejor que Buy & Hold | mismo periodo y símbolos, rendimientos encadenados por sesión |
+| Caída máxima | ≤ `max_drawdown` del perfil de riesgo |
+| Broker externo | órdenes por Alpaca paper (no fills simulados) |
+| Cuadre con el broker | 0 descuadres persistentes en `ops_events` |
+| Kill switch probado | activado y desactivado al menos una vez |
+
+`ops_events` (SQLite) audita sesiones, kill switch, caídas/recuperaciones del broker, descuadres y
+cambios de veredicto. Cuando el veredicto cambia se avisa una vez (banner, log y webhook opcional
+`NOTIFY_WEBHOOK_URL`). La puerta solo informa: pasar a LIVE sigue exigiendo un adaptador real y la
+doble bandera.
 
 ### Datos
 Histórico masivo en Parquet (`data/parquet/<tf>/<symbol>.parquet`) consultado con DuckDB.

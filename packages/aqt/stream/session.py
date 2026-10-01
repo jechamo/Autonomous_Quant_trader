@@ -29,6 +29,11 @@ class UsEquitySession:
         c = now.replace(hour=self.close_time[0], minute=self.close_time[1], second=0, microsecond=0)
         return now, o, c
 
+    def bounds(self, ts: float) -> tuple[float, float]:
+        """Epoch seconds of the regular open and close of the New York day containing ``ts``."""
+        _, o, c = self._bounds(ts)
+        return o.timestamp(), c.timestamp()
+
     def is_trading_day(self, ts: float) -> bool:
         d = datetime.fromtimestamp(ts, NY).date()
         return d.weekday() < 5 and d not in self.holidays

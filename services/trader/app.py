@@ -98,12 +98,26 @@ def create_app(runtime: TraderRuntime, push_seconds: float = 0.5) -> FastAPI:
         if runtime.lab is None:
             return {
                 "status": {"enabled": False},
+                "hypotheses": [],
                 "runs": [],
                 "rules": [],
                 "events": [],
                 "lessons": [],
             }
         return runtime.lab.overview()
+
+    @app.get("/api/hypotheses")
+    async def hypotheses() -> list[dict[str, Any]]:
+        if runtime.lab is None:
+            return []
+        hyps: list[dict[str, Any]] = runtime.lab.overview()["hypotheses"]
+        return hyps
+
+    @app.get("/api/golive")
+    async def golive() -> dict[str, Any]:
+        if runtime.golive is None:
+            return {"enabled": False}
+        return {"enabled": True, **runtime.golive.overview()}
 
     @app.post("/api/research/run")
     async def research_run() -> dict[str, Any]:

@@ -26,7 +26,9 @@ independiente y cubierto por tests.
 | SQLite local + **dashboard en localhost** (kill switch, pausa, agresividad) | ✅ bloque 2 |
 | **Research Lab**: research programado, golden check, champion/challenger, meta-learning | ✅ bloque 3 |
 | **Acciones de EE. UU.** (Alpaca en vivo, Yahoo/Alpaca para research y simulación) | ✅ bloque 3 |
-| AI Analyst, Champion/Challenger formal, dashboard desplegado | ⏳ ver [`docs/roadmap.md`](docs/roadmap.md) |
+| **Swing multi-timeframe** (1 h / 4 h, features entre valores, FDR global único) | ✅ bloque 4 |
+| **Analista IA** (OpenAI): propone hipótesis en el DSL que el lab examina; nunca opera | ✅ bloque 4 |
+| Dashboard desplegado, sincronización de hipótesis con Supabase | ⏳ ver [`docs/roadmap.md`](docs/roadmap.md) |
 
 Estado detallado requisito por requisito: [`docs/prd-traceability.md`](docs/prd-traceability.md).
 

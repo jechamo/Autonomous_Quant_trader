@@ -49,29 +49,51 @@ Binance WS (bookTicker + aggTrade) ─► velas de N s ─► features increment
 ## Research Lab: aprendizaje continuo
 
 ```bash
-uv run python -m services.trader research                     # un ciclo ahora (top-10 USDC, 7 días)
+uv run python -m services.trader research                     # un ciclo ahora (top-10 USDC, 365 días)
+uv run python -m services.trader research --timeframes 1h,4h  # sólo swing
+uv run python -m services.trader analyst --dry-run            # qué leería el Analista IA
 uv run python -m services.trader simulate --learn --headless  # el bucle completo sobre 72 h reales
 ```
 
-- Cada 6 h (proceso aparte, el trading no se detiene) prueba ~1.800 variantes de 7 familias de reglas
-  sobre los últimos 7 días de velas de 1 s, con validación fuera de muestra, walk-forward, Monte
-  Carlo y FDR global. Las supervivientes pasan una comprobación *golden* en el motor real.
+- Cada 6 h (proceso aparte, el trading no se detiene) prueba miles de variantes a varias escalas:
+  intradía (7 familias sobre los últimos 7 días de velas de 1 s) y swing de 1 h / 4 h (7 familias
+  entre valores, tendencia y ruptura sobre 365 días), con validación fuera de muestra,
+  walk-forward, Monte Carlo y **un único FDR global** para todas. Las supervivientes pasan una
+  comprobación *golden* en el motor real.
+- **Swing**: las reglas de ≥ 1 h mantienen la posición entre sesiones (en acciones no son
+  *day trades*); las intradía siguen cerrando antes del cierre.
+- **Analista IA** (opcional, `OPENAI_API_KEY` en `.env`): antes de cada ciclo lee lo que el lab ha
+  aprendido y propone hasta 5 hipótesis nuevas en el DSL, que el lab examina con el mismo rigor.
+  Nunca opera ni ve claves de broker. Modelo `OPENAI_MODEL_STRONG` (si no `_CHEAP`, si no
+  `gpt-5-mini`); máximo 6 llamadas al día. `--no-analyst` lo desactiva.
 - **Challenger**: opera sólo en sombra hasta ganar evidencia forward. **Champion**: su evidencia
   convence al Risk Engine y opera en paper. **Retirada**: deja de funcionar (o de dar señales).
 - **Meta-learning**: cada hora, de las operaciones ganadoras y perdedoras de cada estrategia
   (también las 5 base) aprende cuándo conviene filtrar sus señales; si mejora fuera de muestra
   nace una versión filtrada que vuelve a empezar como challenger.
-- Todo queda en SQLite (`rules`, `rule_events`, `lessons`, `research_runs`) y en el dashboard.
+- Todo queda en SQLite (`rules`, `rule_events`, `lessons`, `research_runs`, `hypotheses`) y en
+  el dashboard.
 
 ## Acciones de EE. UU. (`--market stocks`)
 
 - `simulate` y `research` funcionan sin cuenta con datos de Yahoo (~7 días de velas de 1 min).
 - `run` necesita claves **paper** gratuitas de Alpaca en `.env` (`ALPACA_API_KEY_ID`,
-  `ALPACA_API_SECRET_KEY`): dan streaming IEX y años de historia para el lab.
-- Intradía estricto: sin entradas en los últimos 15 min y todo cerrado 5 min antes de las 16:00 NY.
+  `ALPACA_API_SECRET_KEY`): dan streaming IEX y años de historia para el lab (15 min y 1 h).
+- Reglas intradía: sin entradas en los últimos 15 min y todo cerrado 5 min antes de las 16:00 NY.
+  Reglas swing (≥ 1 h): sólo entran con mercado abierto y pueden mantener la posición de un día
+  para otro.
 - Para dinero real en EE. UU.: la regla PDT limita a 3 *day trades* en 5 días a cuentas margin
   < 25.000 $, y en cuentas cash el dinero de una venta tarda T+1 en liquidarse. Los ETF de EE. UU.
   pueden no estar disponibles para clientes minoristas de la UE (PRIIPs).
+
+## Puerta a real: ¿cuándo está listo?
+
+El panel «Puerta a real» del dashboard evalúa cada hora 10 criterios sobre la cuenta paper
+(≥ 28 días, ≥ 50 operaciones, neto positivo con ventaja estadística, ≥ 3 de 4 semanas positivas,
+mejor que Buy & Hold, caída dentro del límite, órdenes por Alpaca paper sin descuadres y kill switch
+probado). Cuando todos están en verde aparece un banner verde y, si pones
+`NOTIFY_WEBHOOK_URL=https://ntfy.sh/<tu-tema>` en `.env` (app ntfy en el móvil), te llega un aviso.
+Avisa también si deja de cumplirse. No activa nada: el paso a real lo decides tú.
 
 ## Límites deliberados
 

@@ -14,7 +14,8 @@ def _no_real_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     import services.trader.cli as cli
 
     monkeypatch.setattr(cli, "load_dotenv", lambda *a, **k: [])
-    for name in (*KEY_ALIASES, *SECRET_ALIASES, *ENDPOINT_ALIASES):
+    openai = ("OPENAI_API_KEY", "OPENAI_MODEL_STRONG", "OPENAI_MODEL_CHEAP")
+    for name in (*KEY_ALIASES, *SECRET_ALIASES, *ENDPOINT_ALIASES, *openai):
         monkeypatch.delenv(name, raising=False)
 
 

@@ -15,6 +15,7 @@ from aqt.stream.engine import StreamingEngine
 from aqt.stream.events import Event
 from aqt.stream.store import SQLiteStore
 
+from services.trader.golive_monitor import GoLiveMonitor
 from services.trader.lab_scheduler import LabScheduler
 
 log = logging.getLogger(__name__)
@@ -39,6 +40,7 @@ class TraderRuntime:
         tick_seconds: float = 0.5,
         persist_controls: bool = True,
         lab: LabScheduler | None = None,
+        golive: GoLiveMonitor | None = None,
     ) -> None:
         self.engine = engine
         self.store = store
@@ -50,6 +52,7 @@ class TraderRuntime:
         self._tasks: list[asyncio.Task[None]] = []
         self.persist_controls = persist_controls
         self.lab = lab
+        self.golive = golive
         if persist_controls:
             self._restore_settings()
 
@@ -76,6 +79,8 @@ class TraderRuntime:
         """Operator controls from the dashboard. Every change is persisted (audit + restart)."""
         e = self.engine
         if kill_switch is not None:
+            if self.golive is not None and kill_switch != e.kill_switch:
+                self.golive.event("kill_switch_on" if kill_switch else "kill_switch_off")
             e.kill_switch = kill_switch
             self._persist("kill_switch", str(kill_switch).lower())
         if aggressiveness is not None:
@@ -113,6 +118,9 @@ class TraderRuntime:
         snap["uptime_s"] = self.clock() - self.started_at
         if self.lab is not None:
             snap["lab"] = self.lab.status()
+        if self.golive is not None and self.golive.report is not None:
+            r = self.golive.report
+            snap["golive"] = {"ready": r.ready, "passed": r.passed, "total": len(r.criteria)}
         info = getattr(self.feed, "info", None)
         if info is not None:
             sim = info()
@@ -145,6 +153,9 @@ class TraderRuntime:
         self._tasks.append(asyncio.create_task(self._tick(), name="clock"))
         if self.lab is not None:
             self._tasks.append(asyncio.create_task(self.lab.loop(), name="lab"))
+        if self.golive is not None:
+            self.golive.begin()
+            self._tasks.append(asyncio.create_task(self.golive.loop(), name="golive"))
         venue_loop = getattr(self.engine.broker, "run", None)
         if venue_loop is not None:  # remote venue (Alpaca paper): order routing + reconciliation
             self._tasks.append(asyncio.create_task(venue_loop(), name="venue"))

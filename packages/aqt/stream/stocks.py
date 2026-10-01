@@ -103,14 +103,28 @@ def load_yahoo_1m(
 
 
 def bar_events(
-    bars: pd.DataFrame, symbol: str, spread_pct: float = 0.0002, seconds: float = 60.0
+    bars: pd.DataFrame,
+    symbol: str,
+    spread_pct: float = 0.0002,
+    seconds: float = 60.0,
+    session: UsEquitySession | None = None,
 ) -> Iterator[Event]:
-    """1-minute bars → conservative quote path (open, extremes, close) + signed trades."""
+    """Bars of any length → conservative quote path (open, extremes, close) + signed trades.
+
+    With a ``session`` the path is squeezed into the part of the bar when the market is open
+    (an hourly bar starting at 09:00 New York trades from 09:30), so simulated orders can fill.
+    """
     half = spread_pct / 2
-    step = seconds / 5
     tb_col = "taker_buy_volume" if "taker_buy_volume" in bars else None
     for ts, row in zip(bars.index, bars.itertuples(index=False), strict=True):
         t = pd.Timestamp(ts).timestamp()
+        end = t + seconds
+        if session is not None:
+            day_open, day_close = session.bounds(t)
+            t, end = max(t, day_open), min(end, day_close)
+            if end - t < 1.0:
+                continue
+        step = (end - t) / 5
         o, h, lo, c, v = (
             float(getattr(row, k)) for k in ("open", "high", "low", "close", "volume")
         )

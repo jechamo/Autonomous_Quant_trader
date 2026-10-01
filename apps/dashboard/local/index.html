@@ -38,6 +38,7 @@
   </header>
 
   <div id="banner" class="banner hidden"></div>
+  <div id="golive-banner" class="banner ready hidden"></div>
 
   <section class="kpis">
     <div class="kpi"><div class="k">Equity</div><div class="v" id="k-equity">—</div><div class="s" id="k-equity-s"></div></div>
@@ -102,6 +103,20 @@
       <h3>Decisiones del Risk Engine</h3>
       <div class="scroll"><ul id="decisions" class="decisions"></ul></div>
     </section>
+    <section class="panel wide" id="golive-panel">
+      <div class="panel-head">
+        <h3>Puerta a real · ¿listo para dinero real?</h3>
+        <span class="muted" id="golive-status">—</span>
+      </div>
+      <p class="muted">Se evalúa cada hora sobre esta cuenta paper. Cuando todo esté en verde verás un aviso aquí arriba
+        (y en el móvil si configuras <code>NOTIFY_WEBHOOK_URL</code>). Nada se activa solo: pasar a real es decisión tuya.</p>
+      <div class="scroll-x">
+        <table class="table" id="golive-table">
+          <thead><tr><th></th><th>Criterio</th><th>Ahora</th><th>Objetivo</th><th>Detalle</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
     <section class="panel lab wide">
       <div class="panel-head">
         <h3>Research Lab · aprendizaje continuo</h3>
@@ -138,6 +153,18 @@
             <tbody></tbody>
           </table>
         </div>
+      </div>
+    </section>
+    <section class="panel wide">
+      <div class="panel-head">
+        <h3>Analista IA · hipótesis propuestas</h3>
+        <span class="muted">Solo propone ideas; el Research Lab las examina igual que las demás. Nunca opera.</span>
+      </div>
+      <div class="scroll-x">
+        <table class="table" id="ai-hyps">
+          <thead><tr><th>Fecha</th><th>Hipótesis</th><th>Timeframe</th><th>Qué espera y por qué</th><th>Estado</th><th>Resultado del lab</th></tr></thead>
+          <tbody></tbody>
+        </table>
       </div>
     </section>
   </main>

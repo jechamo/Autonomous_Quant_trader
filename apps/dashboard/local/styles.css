@@ -52,6 +52,10 @@ h3 { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: var(--muted);
 .banner { margin: 12px 20px 0; padding: 10px 14px; border-radius: 6px; font-weight: 600;
   background: #3a1414; border: 1px solid #7f1d1d; color: #fecaca; }
 .banner.info { background: #172554; border-color: #1e40af; color: #bfdbfe; }
+.banner.ready { background: #052e16; border-color: #15803d; color: #bbf7d0; }
+.gate-ok { color: var(--up); font-weight: 700; }
+.gate-no { color: var(--down); font-weight: 700; }
+#golive-table td { white-space: normal; vertical-align: top; }
 
 .kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; padding: 16px 20px 0; }
 .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; }
@@ -127,4 +131,8 @@ h3 { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: var(--muted);
 .pill.champion { background: #14532d; color: #86efac; }
 .pill.retired { background: #3a1414; color: #fca5a5; }
 .pill.candidate { background: #27303d; color: var(--muted); }
+.pill.proposed { background: #1e3a5f; color: #93c5fd; }
+.pill.promoted { background: #14532d; color: #86efac; }
+.pill.rejected, .pill.invalid { background: #27303d; color: var(--muted); }
+#ai-hyps td { white-space: normal; vertical-align: top; }
 @media (max-width: 1100px) { .lab-grid { grid-template-columns: minmax(0, 1fr); } }

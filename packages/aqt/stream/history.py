@@ -124,6 +124,82 @@ def resample_klines(df: pd.DataFrame, rule: str = "1min") -> pd.DataFrame:
     return out.astype(float)
 
 
+TIMEFRAME_SECONDS = {"1min": 60, "5min": 300, "15min": 900, "1h": 3600, "4h": 14400, "1d": 86400}
+PANDAS_RULE = {"1min": "1min", "5min": "5min", "15min": "15min", "1h": "1h", "4h": "4h", "1d": "1D"}
+BINANCE_INTERVAL = {"1min": "1m", "5min": "5m", "15min": "15m", "1h": "1h", "4h": "4h", "1d": "1d"}
+
+
+def resample_bars(df: pd.DataFrame, timeframe: str) -> pd.DataFrame:
+    """OHLCV (+ taker-buy) bars → coarser bars aligned to UTC clock boundaries, like the live
+    engine's buckets (``floor(ts / timeframe)``). Empty buckets are dropped."""
+    agg = {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}
+    if "taker_buy_volume" in df.columns:
+        agg["taker_buy_volume"] = "sum"
+    out = df.resample(PANDAS_RULE[timeframe], label="left", closed="left").agg(agg)
+    return out.dropna(subset=["open"]).astype(float)
+
+
+def _kline_rows_to_bars(rows: Iterable[Sequence[object]]) -> pd.DataFrame:
+    df = klines_frame(rows)
+    df.index = pd.to_datetime(df["open_time"], unit="ms", utc=True)
+    return df[["open", "high", "low", "close", "volume", "taker_buy_volume"]]
+
+
+def load_binance_klines(
+    symbol: str,
+    start_ms: int,
+    end_ms: int,
+    timeframe: str = "1h",
+    cache_dir: str | Path = "data/stream/binance_klines",
+    base_url: str = REST_URL,
+) -> pd.DataFrame:  # pragma: no cover - network
+    """Klines at ``timeframe`` (15min/1h/4h/1d…) with taker-buy volume; complete months cached."""
+    interval = BINANCE_INTERVAL[timeframe]
+    cache = Path(cache_dir) / symbol.upper() / interval
+    cache.mkdir(parents=True, exist_ok=True)
+    now = pd.Timestamp.now(tz="UTC")
+    months = pd.period_range(
+        pd.Timestamp(start_ms, unit="ms", tz="UTC").tz_localize(None),
+        pd.Timestamp(end_ms, unit="ms", tz="UTC").tz_localize(None),
+        freq="M",
+    )
+    frames = []
+    with httpx.Client(base_url=base_url, timeout=20, verify=system_ssl_context()) as client:
+        for m in months:
+            lo = int(m.start_time.tz_localize("UTC").timestamp() * 1000)
+            hi = int(
+                (m.end_time.tz_localize("UTC") + pd.Timedelta(microseconds=1)).timestamp() * 1000
+            )
+            path = cache / f"{m}.parquet"
+            complete = m.end_time.tz_localize("UTC") < now
+            if complete and path.exists():
+                frames.append(pd.read_parquet(path))
+                continue
+            rows: list[list[object]] = []
+            cursor = lo
+            while cursor < hi:
+                r = client.get(
+                    "/api/v3/klines",
+                    params={"symbol": symbol, "interval": interval, "startTime": cursor,
+                            "endTime": hi - 1, "limit": 1000},
+                )  # fmt: skip
+                r.raise_for_status()
+                batch = r.json()
+                if not batch:
+                    break
+                rows.extend(batch)
+                cursor = int(batch[-1][0]) + 1
+            month = _kline_rows_to_bars(rows)
+            if complete:
+                month.to_parquet(path)
+            frames.append(month)
+    bars = pd.concat(frames) if frames else _kline_rows_to_bars([])
+    bars = bars[~bars.index.duplicated(keep="last")].sort_index()
+    lo_ts = pd.Timestamp(start_ms, unit="ms", tz="UTC")
+    hi_ts = pd.Timestamp(end_ms, unit="ms", tz="UTC")
+    return bars[(bars.index >= lo_ts) & (bars.index < hi_ts)].astype(float)
+
+
 def kline_events(df: pd.DataFrame, symbol: str, spread_pct: float = 0.0001) -> Iterator[Event]:
     """Turn 1-second klines into quotes + trades (see the module docstring)."""
     half = spread_pct / 2

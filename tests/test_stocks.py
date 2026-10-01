@@ -200,7 +200,7 @@ def test_lab_cycle_runs_on_stock_bars() -> None:
     end_ms = int((days[-1] + 7 * 3600) * 1000)
     res = run_research_cycle(SQLiteStore(), cfg, BarData(loader, 0.0002), end_ms=end_ms)
     assert res.error == "" and res.summary["n_hypotheses"] > 0
-    assert res.summary["n_bars"]["AAPL"] == 7 * 390
+    assert res.summary["n_bars"]["AAPL@1min"] == 7 * 390
 
 
 def test_cli_stocks_requires_alpaca_keys_for_live(monkeypatch: pytest.MonkeyPatch) -> None:

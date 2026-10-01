@@ -14,12 +14,12 @@ Detalle requisito por requisito en [`prd-traceability.md`](prd-traceability.md).
 | 8 | `Trading212Broker` real (demo) | ⏳ iteración 2 |
 | 9 | Paper Trader: Signal → Risk → Broker, registrar todas las decisiones | 🟡 streaming paper sobre Binance ✅ (bloque 2); contra T212 Demo ⏳ |
 | 10 | Shadow Engine (Champion, Challengers, Buy & Hold, Cash) + counterfactuals | 🟡 sombra por estrategia + Buy & Hold + champion/challenger del Research Lab ✅; Cash ⏳ |
-| 11 | AI Analyst (OpenAI) con salida estructurada, sin acceso a órdenes | ⏳ iteración 3 |
+| 11 | AI Analyst (OpenAI) con salida estructurada, sin acceso a órdenes | ✅ local: propone hipótesis en el DSL que el Research Lab examina (bloque 4); sincronización con Supabase ⏳ |
 | 12 | Autonomous Research Loop (Railway cron) | 🟡 bucle completo en local (research cada 6 h, revisión y meta-learning cada hora); Railway ⏳ |
 | 13 | Dashboard | 🟡 dashboard local en localhost ✅; Lovable/Vercel ⏳ |
 | 14 | Deploy (Vercel / Supabase / Railway) | ⏳ (de momento todo corre en local) |
 | 15 | Seguridad: entornos DEV/PAPER/LIVE, kill switch global | 🟡 flags en código; kill switch operativo en el dashboard local |
-| 16 | Go-live gate (100 €) | ⏳ |
+| 16 | Go-live gate (100 €) | 🟡 puerta automática con 10 criterios, panel en el dashboard y aviso (bloque 4); falta el adaptador de broker real |
 
 ## Bloque 1 (en curso): research con datos reales
 
@@ -69,11 +69,35 @@ día, ejecutable en local con frontal en localhost. Mercado elegido: **cripto sp
 - Resultado real a 2026-10-01: 0 reglas sobreviven en cripto (1.790 hipótesis, 7 días) ni en
   acciones (historia Yahoo insuficiente); el sistema, correctamente, no opera.
 - ⏳ Claves Alpaca del usuario (historia larga de acciones + streaming).
-- ⏳ Festivos de mercado desde el calendario de Alpaca; órdenes *maker*; AI Analyst (LLM) sólo
-  para proponer hipótesis al lab.
+- ⏳ Festivos de mercado desde el calendario de Alpaca.
 - ⏳ Órdenes *maker* (límite post-only) para reducir comisiones; modelo de cola.
 - ⏳ Benchmarks Buy & Hold / Cash en la sombra; informe de replay en Markdown.
 - ⏳ Adaptador Binance real + go-live gate específico (no antes de evidencia forward suficiente).
+
+## Bloque 4 (en curso): buscar ventaja real + Analista IA
+
+Contexto: a horizontes de minutos ninguna regla sobrevive a los costes, y en acciones la mayoría
+de pruebas fallaban por muestra insuficiente. Se amplía dónde buscar, sin relajar el rigor.
+
+- ✅ Historia larga a varias escalas: klines de Binance (1h, 4h, 1d) y barras de Alpaca
+  remuestreadas (15min, 1h, 1d) con caché; 365 días por defecto.
+- ✅ Research multi-timeframe (cripto 1min/1h/4h, acciones 15min/1h) con **un único FDR global**
+  sobre todas las hipótesis de todos los timeframes.
+- ✅ Features entre valores (rango de retorno en el universo, fuerza relativa, amplitud de
+  mercado) y de calendario, retrasadas una barra; paridad research ↔ vivo testeada.
+- ✅ Catálogo swing (≥ 1 h): momentum y reversión entre valores, fuerza relativa, tendencia,
+  ruptura con volumen, amplitud. Las reglas ≥ 1 h mantienen posiciones entre sesiones (sin
+  *day trades*, evita la regla PDT); las intradía siguen cerrando antes del cierre.
+- ✅ **Analista IA** (`packages/aqt/analyst`, OpenAI): lee lecciones, checks que fallan, mejores
+  pares, evidencia forward y sus propias hipótesis anteriores; propone reglas en el DSL que se
+  validan estrictamente y el lab examina en el mismo FDR global. Presupuesto diario, aislado de
+  brokers y riesgo (test). Panel «Analista IA» en el dashboard.
+- ✅ **Puerta a real**: cada hora evalúa la cuenta paper (≥ 28 días, ≥ 50 operaciones, neto
+  positivo, ventaja significativa, ≥ 3 de 4 semanas positivas, mejor que Buy & Hold, caída dentro
+  del límite, órdenes por un broker paper externo sin descuadres, kill switch probado). Avisa una
+  vez cuando cambia (banner + webhook opcional al móvil). No activa nada por sí misma.
+- ⏳ Familias de pares, correlación y beta contra benchmark; sincronizar `hypotheses` con la
+  tabla `ai_hypotheses` de Supabase.
 
 ## Próximos pasos técnicos sugeridos
 
