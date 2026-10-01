@@ -7,16 +7,16 @@ existen y que el resumen cuadra con las filas.
 
 **Leyenda:** ✅ hecho · 🟡 parcial · ⏳ pendiente · 🚫 excluido por diseño (y forzado en código)
 
-**Última actualización:** 2026-10-01 · iteración 1 + hardening Supabase
+**Última actualización:** 2026-10-01 · bloque 1: datos Yahoo, estudio multi-símbolo con FDR global, persistencia
 
 <!-- summary:start -->
 | Estado | Requisitos |
 |---|---|
-| ✅ | 123 |
-| 🟡 | 26 |
-| ⏳ | 71 |
+| ✅ | 126 |
+| 🟡 | 29 |
+| ⏳ | 67 |
 | 🚫 | 7 |
-| **Total** | **227** |
+| **Total** | **229** |
 
 | Sección | ✅ | 🟡 | ⏳ | 🚫 | Total |
 |---|---|---|---|---|---|
@@ -28,18 +28,18 @@ existen y que el resumen cuadra con las filas.
 | §6 | 3 | 1 | 0 | 0 | 4 |
 | §7 | 11 | 1 | 0 | 0 | 12 |
 | §8 | 2 | 1 | 0 | 0 | 3 |
-| §9 | 4 | 2 | 6 | 0 | 12 |
+| §9 | 6 | 3 | 5 | 0 | 14 |
 | §10 | 5 | 0 | 10 | 7 | 22 |
 | §11 | 18 | 0 | 6 | 0 | 24 |
-| §12 | 11 | 4 | 2 | 0 | 17 |
+| §12 | 12 | 4 | 1 | 0 | 17 |
 | §13 | 4 | 0 | 1 | 0 | 5 |
 | §14 | 1 | 3 | 2 | 0 | 6 |
 | §15 | 0 | 0 | 4 | 0 | 4 |
 | §16 | 0 | 1 | 1 | 0 | 2 |
 | §17 | 17 | 2 | 0 | 0 | 19 |
-| §18 | 4 | 0 | 1 | 0 | 5 |
+| §18 | 4 | 1 | 0 | 0 | 5 |
 | §19 | 0 | 2 | 4 | 0 | 6 |
-| §20 | 5 | 0 | 1 | 0 | 6 |
+| §20 | 5 | 1 | 0 | 0 | 6 |
 | §21 | 4 | 1 | 4 | 0 | 9 |
 | §22 | 2 | 0 | 0 | 0 | 2 |
 | §23 | 2 | 0 | 1 | 0 | 3 |
@@ -137,8 +137,10 @@ existen y que el resumen cuadra con las filas.
 | R9.08 | Backtester por arrays para investigación masiva | 🟡 | `packages/aqt/backtest/engine.py::run_backtest` | `tests/test_backtest.py::test_entry_next_open_and_stop_same_bar` | Bucle NumPy; falta acelerar (numba/vectorbt) para decenas de miles de variantes |
 | R9.09 | Framework sencillo como validación secundaria | ⏳ | — | — | — |
 | R9.10 | Histórico masivo en Parquet, no en Postgres | ✅ | `packages/aqt/data/store.py::ParquetStore` | `tests/test_data.py::test_parquet_roundtrip` | — |
-| R9.11 | Supabase para metadatos, estrategias, resultados, experimentos | 🟡 | `supabase/migrations/20261001000000_initial_schema.sql` | — | Tablas creadas; falta persistir desde Python |
-| R9.12 | Descarga de datos históricos reales | ⏳ | `packages/aqt/data/adapters.py::MarketDataAdapter` | — | Sólo sintético/CSV/Parquet local; falta adaptador de proveedor |
+| R9.11 | Supabase para metadatos, estrategias, resultados, experimentos | 🟡 | `packages/aqt/persistence/store.py::SupabaseStore` | `tests/test_persistence.py::test_persist_study_writes_expected_rows` | Código listo; falta primera escritura real (red + secreto `SUPABASE_SERVICE_ROLE_KEY`) |
+| R9.12 | Descarga de datos históricos reales | 🟡 | `packages/aqt/data/yahoo.py::YahooAdapter`, `services/research/cli.py::fetch` | `tests/test_yahoo.py::test_adapter_retries_then_succeeds` | Yahoo/yfinance diario ajustado → Parquet. Probado con respuestas simuladas; la red del entorno aún bloquea Yahoo |
+| R9.13 | Universo invertible en Trading 212 desde la UE (sin ETF de EE. UU. por PRIIPs/KID) | ✅ | `packages/aqt/data/universe.py::UNIVERSES` | `tests/test_yahoo.py::test_universe` | ETF de EE. UU. sólo como proxies de research (`EVIDENCE_ONLY`); prioridad a instrumentos en EUR |
+| R9.14 | Estudio multi-símbolo × multi-estrategia desde CLI | ✅ | `services/research/cli.py::study`, `packages/aqt/research/study.py::run_study` | `tests/test_research.py::test_cli_fetch_and_study` | Informe de estudio JSON + Markdown con ranking |
 
 ## §10 Catálogo de estrategias
 
@@ -214,9 +216,9 @@ existen y que el resumen cuadra con las filas.
 | R12.12 | Evitar data leakage | 🟡 | `packages/aqt/statistics/validation.py::purged_kfold_splits` | `tests/test_statistics.py::test_purged_kfold` | Embargo disponible; integrar en pipeline/ML |
 | R12.13 | Evitar overfitting | 🟡 | `packages/aqt/statistics/validation.py::walk_forward` | `tests/test_research.py::test_random_walk_is_not_promoted` | OOS + WF + estabilidad; falta Deflated Sharpe / PBO |
 | R12.14 | Evitar selection bias | ✅ | `packages/aqt/research/pipeline.py::run_research` | `tests/test_research.py::test_pipeline_is_reproducible` | La variante se selecciona sólo con IS y se congela |
-| R12.15 | Evitar data snooping | 🟡 | `packages/aqt/statistics/multiple_testing.py::benjamini_hochberg` | `tests/test_statistics.py::test_fdr_controls_false_discoveries_under_null` | FDR por estudio; falta registro global de hipótesis probadas |
+| R12.15 | Evitar data snooping | 🟡 | `packages/aqt/research/study.py::run_study` | `tests/test_study.py::test_global_fdr_decides_candidates` | FDR sobre todo el estudio y nº de hipótesis guardado en `experiments`; falta control acumulado entre estudios sucesivos |
 | R12.16 | Control de multiple hypothesis testing (FDR) | ✅ | `packages/aqt/statistics/multiple_testing.py::benjamini_hochberg` | `tests/test_statistics.py::test_benjamini_hochberg` | — |
-| R12.17 | FDR global sobre miles de hipótesis (todo el universo) | ⏳ | — | — | Hoy por estrategia × símbolo |
+| R12.17 | FDR global sobre miles de hipótesis (todo el universo) | ✅ | `packages/aqt/research/study.py::run_study` | `tests/test_study.py::test_global_fdr_decides_candidates` | BH sobre todas las variantes × estrategias × símbolos; sin superarlo no hay candidato |
 
 ## §13 Bayesian Evidence Engine
 
@@ -287,7 +289,7 @@ existen y que el resumen cuadra con las filas.
 | R18.02 | Descartar estrategias que sólo funcionan antes de costes | ✅ | `packages/aqt/research/pipeline.py::run_research` | `tests/test_research.py::test_pipeline_is_reproducible` | Check `edge_after_costs` |
 | R18.03 | Filtro económico por operación en vivo | ✅ | `packages/aqt/risk/engine.py::RiskEngine` | `tests/test_risk.py::test_each_check_rejects` | `min_expected_net_edge` |
 | R18.04 | Comisiones fijas relevantes con cuentas pequeñas | ✅ | `packages/aqt/backtest/costs.py::CostModel` | `tests/test_backtest.py::test_cost_model_validation` | Coste calculado sobre el nocional real |
-| R18.05 | Tarifas reales de Trading 212 (FX 0,15 %, etc.) verificadas | ⏳ | `packages/aqt/backtest/costs.py::CostModel` | — | Valores por defecto estimados; validar antes de Live |
+| R18.05 | Tarifas reales de Trading 212 (FX 0,15 %, etc.) verificadas | 🟡 | `packages/aqt/backtest/costs.py::CostModel` | `tests/test_yahoo.py::test_trading212_costs` | `CostModel.trading212`: sin comisión, FX 0,15 % por lado si la divisa ≠ EUR, spread/slippage conservadores. Verificar tarifas vigentes antes de Live |
 
 ## §19 AI Analyst
 
@@ -311,7 +313,7 @@ lectura para `authenticated`, sin acceso `anon` y escritura sólo vía `service_
 | R20.02 | RLS en todas las tablas | ✅ | `supabase/migrations/20261001000000_initial_schema.sql` | — | — |
 | R20.03 | Privilegios mínimos (anon sin acceso, dashboard sólo lectura + slider/kill switch) | ✅ | `supabase/migrations/20261001010000_harden_privileges.sql` | — | Advisor de seguridad de Supabase sin avisos |
 | R20.04 | Auditoría de cambios de configuración | ✅ | `supabase/migrations/20261001000000_initial_schema.sql` | — | Trigger → `config_audit_log` |
-| R20.05 | Persistencia desde Python (cliente Supabase) | ⏳ | — | — | Próximo paso: guardar experimentos y backtests |
+| R20.05 | Persistencia desde Python (cliente Supabase) | 🟡 | `packages/aqt/persistence/store.py::SupabaseStore` | `tests/test_persistence.py::test_failure_marks_experiment_failed` | Escribe `experiments`, `strategies`, `strategy_versions`, `backtests`, `walk_forward_runs` vía PostgREST; pendiente primera ejecución real |
 | R20.06 | La memoria del LLM no es almacenamiento principal | ✅ | `supabase/migrations/20261001000000_initial_schema.sql` | — | — |
 
 ## §21–22 Arquitectura y uso de Lovable

@@ -35,7 +35,16 @@ uv run python -m services.research.cli run --symbol SPY --timeframe 1d --strateg
 uv run python -m services.research.cli list
 ```
 
-Sin datos reales, la CLI usa `--source synthetic` (determinista). Para datos propios:
+Datos reales (Yahoo Finance, diario ajustado) y estudio completo con FDR global:
+
+```bash
+uv run python -m services.research.cli fetch --universe default --start 2005-01-01
+uv run python -m services.research.cli study --universe tradable --strategies all
+uv run python -m services.research.cli study --universe tradable --persist   # guarda en Supabase
+```
+
+Universos: `default`, `tradable` (invertible en Trading 212 desde la UE), `eur`, `proxies`, o una
+lista `AAPL,SAN.MC`. Sin red, la CLI usa `--source synthetic` (determinista). Para datos propios:
 
 ```bash
 # Parquet: data/parquet/<timeframe>/<SYMBOL>.parquet

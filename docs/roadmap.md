@@ -21,6 +21,15 @@ Detalle requisito por requisito en [`prd-traceability.md`](prd-traceability.md).
 | 15 | Seguridad: entornos DEV/PAPER/LIVE, kill switch global | 🟡 flags y kill switch en código y esquema |
 | 16 | Go-live gate (100 €) | ⏳ |
 
+## Bloque 1 (en curso): research con datos reales
+
+- ✅ `YahooAdapter` + comando `fetch` → Parquet; universo invertible en T212 UE.
+- ✅ Comando `study`: símbolos × estrategias con FDR global y costes Trading 212.
+- ✅ `SupabaseStore` para guardar experimentos y backtests (`study --persist`).
+- ⏳ Ejecutar con datos reales: requiere permitir en la red del entorno
+  `query1.finance.yahoo.com`, `query2.finance.yahoo.com`, `fc.yahoo.com`, `guce.yahoo.com` y
+  `nzeuzxtpqrsvyvpxaugz.supabase.co`, y el secreto `SUPABASE_SERVICE_ROLE_KEY`.
+
 ## Próximos pasos técnicos sugeridos
 
 - Persistir resultados del pipeline en Supabase (`experiments`, `backtests`, `walk_forward_runs`).
