@@ -86,6 +86,34 @@ uv run python -m services.trader simulate --learn --headless  # el bucle complet
   < 25.000 $, y en cuentas cash el dinero de una venta tarda T+1 en liquidarse. Los ETF de EE. UU.
   pueden no estar disponibles para clientes minoristas de la UE (PRIIPs).
 
+## Panel «Aprendizaje»: el circuito y las bolas
+
+Cada idea de regla viaja de izquierda a derecha. El número de cada nodo es cuántas han llegado
+hasta ahí desde el primer ciclo; el nodo brilla más cuanto mayor es, y una pista se ilumina cuando
+el nodo al que apunta tiene algo (`GET /api/learning`, cada 5 s).
+
+| Nodo | Qué cuenta |
+|---|---|
+| IA | Ideas válidas del analista IA (antes de cada ciclo de research) |
+| Ideas | Hipótesis examinadas: regla × parámetros × símbolo × escala de tiempo |
+| Filtro | Sobreviven al filtro estadístico global (FDR) |
+| Validación | Superan fuera de muestra, walk-forward, Monte Carlo, estabilidad y costes |
+| Motor real | Ganan también en el motor real (latencia, bid/ask, comisiones) |
+| En prueba | Llegaron a challenger: operan en sombra reuniendo evidencia |
+| Opera | Llegaron a champion: operan en paper vía Risk Engine |
+| ML | Filtros aprendidos (se enciende con el primer intento); vuelven como reglas en prueba |
+
+Chispas: un ciclo de research recorre Ideas → Filtro → Validación → Motor real; una idea de la IA,
+IA → Ideas; un cambio de estado, Motor real → En prueba → Opera; un intento de ML, En prueba ↔ ML;
+una lección, Validación → Motor real; una operación en sombra llega a En prueba y una en paper a
+Opera. Cada 2 s corre además una chispa decorativa por una pista encendida.
+
+| Bola | Cómo se llena (0–100 %) | Puntitos |
+|---|---|---|
+| Reglas | La mejor regla en prueba: edge y confianza en vivo frente a los mínimos del Risk Engine; 100 % = champion | Una por regla; encendida = champion |
+| Machine learning | Media de ejemplos reunidos / necesarios por estrategia (60, y +50 % tras cada intento fallido) | Una por estrategia; encendida = lista o con filtro |
+| Camino a real | Media de los 10 criterios de la puerta a real (días/28, operaciones/50, …; los de sí/no valen 0 o 100 %) | Uno por criterio; encendido = cumplido |
+
 ## Puerta a real: ¿cuándo está listo?
 
 El panel «Puerta a real» del dashboard evalúa cada hora 10 criterios sobre la cuenta paper
