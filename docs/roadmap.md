@@ -1,9 +1,11 @@
 # Roadmap
 
+Detalle requisito por requisito en [`prd-traceability.md`](prd-traceability.md).
+
 | Paso | Descripción | Estado |
 |---|---|---|
 | 1 | Repositorio, CI, tests, `.env.example`, exclusión de secretos | ✅ iteración 1 |
-| 2 | Proyecto Supabase: esquema, RLS, auditoría de configuración | 🟡 migración idempotente validada en Postgres 16; pendiente aplicarla en el proyecto |
+| 2 | Proyecto Supabase: esquema, RLS, auditoría de configuración | 🟡 esquema + hardening aplicados en «Autonomous trading» (advisor de seguridad limpio); faltan Vault, Storage y Auth |
 | 3 | Research Engine + CLI con informe reproducible | ✅ |
 | 4 | Strategy DSL | ✅ |
 | 5 | Statistical Validation Engine | ✅ (OOS, WF, purged CV, Bayes, MC, FDR, costes, régimen) |

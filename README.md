@@ -21,8 +21,10 @@ independiente y cubierto por tests.
 | Risk Engine (APPROVE / REJECT / ADJUST_SIZE) + slider de agresividad con límites absolutos | ✅ |
 | `BrokerAdapter` + `SimulatedBroker` | ✅ |
 | `Trading212Broker` | ⏳ stub (iteración 2) |
-| Esquema Supabase (`supabase/migrations`) con RLS | ✅ ficheros (no aplicado) |
+| Esquema Supabase (`supabase/migrations`) con RLS y privilegios mínimos | ✅ aplicado en el proyecto «Autonomous trading» |
 | Paper Trader, Shadow Engine, AI Analyst, Dashboard | ⏳ ver [`docs/roadmap.md`](docs/roadmap.md) |
+
+Estado detallado requisito por requisito: [`docs/prd-traceability.md`](docs/prd-traceability.md).
 
 ## Inicio rápido
 
@@ -75,9 +77,10 @@ tests/
 
 ## Supabase
 
-Pega el contenido completo de `supabase/migrations/20261001000000_initial_schema.sql` en el
-SQL Editor de un proyecto dedicado. Es atómica y re-ejecutable; si el proyecto ya tiene tablas
-ajenas con alguno de nuestros nombres, aborta sin crear nada e indica cuáles chocan.
+Aplica en orden los ficheros de `supabase/migrations/` (SQL Editor o MCP). Son atómicos y
+re-ejecutables; el esquema inicial aborta sin crear nada si encuentra tablas ajenas con alguno de
+nuestros nombres. `20261001010000_harden_privileges.sql` retira el acceso `anon`, deja al
+dashboard sólo lectura + slider/kill switch y bloquea la llamada RPC a la función de auditoría.
 
 ## Seguridad
 
@@ -87,4 +90,4 @@ ajenas con alguno de nuestros nombres, aborta sin crear nada e indica cuáles ch
 - El slider de agresividad nunca supera `AbsoluteLimits` (riesgo/trade ≤ 2 %, sin apalancamiento,
   sin cortos, sin margen).
 
-Documentación: [PRD](docs/PRD.md) · [Arquitectura](docs/architecture.md) · [Roadmap](docs/roadmap.md)
+Documentación: [PRD](docs/PRD.md) · [Trazabilidad](docs/prd-traceability.md) · [Arquitectura](docs/architecture.md) · [Roadmap](docs/roadmap.md)
