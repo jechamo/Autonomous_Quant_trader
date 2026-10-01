@@ -209,6 +209,23 @@ class LabScheduler:
             counts[r["status"]] = r["n"]
         return {**asdict(self.state), "rules": counts}
 
+    def progress(self) -> dict[str, Any]:
+        """Learning progress for the dashboard (funnel, rules, ML, AI, activity feed)."""
+        from aqt.lab.progress import learning_progress
+
+        p = self.engine.profile
+        return {
+            "status": self.status(),
+            **learning_progress(
+                self.store,
+                self.engine.cfg.run_id,
+                [s.strategy_id for s in self.engine.strategies],
+                self.engine.evidence.table(),
+                p.min_edge_score,
+                p.min_confidence,
+            ),
+        }
+
     def overview(self) -> dict[str, Any]:
         evidence = self.engine.evidence.table()
         rules = []

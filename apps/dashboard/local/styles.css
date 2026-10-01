@@ -57,6 +57,44 @@ h3 { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: var(--muted);
 .gate-no { color: var(--down); font-weight: 700; }
 #golive-table td { white-space: normal; vertical-align: top; }
 
+/* --- learning circuit + orbs ------------------------------------------------ */
+.learn { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+#circuit { width: 100%; max-width: 1100px; height: auto; display: block; margin: 0 auto; }
+#circuit .trace { fill: none; stroke: var(--line); stroke-width: 3; stroke-linecap: round; transition: stroke .6s; }
+#circuit .trace.on { stroke: color-mix(in srgb, var(--node, var(--accent)) 70%, transparent); filter: url(#glow); }
+#circuit .pad { fill: var(--line); }
+#circuit .node .halo { fill: var(--node, var(--accent)); opacity: 0; transition: opacity .8s; filter: url(#blur); }
+#circuit .node.on .halo { opacity: var(--glow, .4); }
+#circuit .node .core { fill: #0e1520; stroke: var(--line); stroke-width: 2.5; transition: stroke .6s; }
+#circuit .node.on .core { stroke: var(--node, var(--accent)); }
+#circuit .node .num { fill: var(--text); font: 600 15px var(--mono); text-anchor: middle; dominant-baseline: central; }
+#circuit .node:not(.on) .num { fill: var(--muted); }
+#circuit .node .lbl { fill: var(--muted); font-size: 14px; text-anchor: middle; }
+#circuit .node.flash .halo { animation: flash 1s ease-out; }
+@keyframes flash { 0% { opacity: 1; } 100% { opacity: var(--glow, .4); } }
+#circuit .spark { fill: #fff; filter: url(#glow); }
+.orbs { display: flex; justify-content: center; gap: clamp(16px, 6vw, 80px); flex-wrap: wrap; }
+.orb { text-align: center; color: var(--muted); font-size: 12px; }
+.orb svg { width: 128px; height: 128px; display: block; margin: 0 auto 6px; }
+.orb .shell { fill: #0e1520; stroke: color-mix(in srgb, var(--c) 60%, var(--line)); stroke-width: 3; }
+.orb .level { transition: transform 1.2s cubic-bezier(.2, .8, .2, 1); }
+.orb .wave { fill: var(--c); opacity: .85; animation: wave 3.5s linear infinite; }
+.orb .wave.back { opacity: .35; animation-duration: 5.5s; animation-direction: reverse; }
+@keyframes wave { from { transform: translateX(0); } to { transform: translateX(-120px); } }
+.orb .pct { fill: var(--text); font: 700 24px var(--mono); text-anchor: middle; dominant-baseline: central;
+  paint-order: stroke; stroke: #0b0f14; stroke-width: 4px; }
+.orb.bump svg { animation: bump .6s ease-out; }
+@keyframes bump { 40% { transform: scale(1.06); } }
+.orb .dots { display: flex; gap: 4px; justify-content: center; margin-top: 4px; min-height: 8px; }
+.orb .dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }
+.orb .dots i.on { background: var(--c); box-shadow: 0 0 6px var(--c); }
+.gbar { position: relative; height: 22px; border-radius: 11px; background: #0e1520; border: 1px solid var(--line);
+  overflow: hidden; margin: 4px 0 12px; }
+.gbar-fill { height: 100%; width: 0; background: linear-gradient(90deg, #15803d, var(--up)); transition: width 1.2s ease; }
+.gbar span { position: absolute; inset: 0; display: grid; place-items: center; font: 600 12px var(--mono); }
+.mini { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; min-width: 60px; }
+.mini b { display: block; height: 100%; background: var(--up); }
+
 .kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; padding: 16px 20px 0; }
 .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; }
 .kpi .k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }

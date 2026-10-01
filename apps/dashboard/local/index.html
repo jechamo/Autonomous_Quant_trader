@@ -103,11 +103,23 @@
       <h3>Decisiones del Risk Engine</h3>
       <div class="scroll"><ul id="decisions" class="decisions"></ul></div>
     </section>
+    <section class="panel wide" id="learn-panel">
+      <h3>Aprendizaje</h3>
+      <div class="learn">
+        <svg id="circuit" viewBox="0 0 870 320" role="img" aria-label="Circuito de aprendizaje"></svg>
+        <div class="orbs">
+          <div class="orb" id="orb-rules" style="--c: var(--accent)"></div>
+          <div class="orb" id="orb-ml" style="--c: var(--shadow)"></div>
+          <div class="orb" id="orb-real" style="--c: var(--up)"></div>
+        </div>
+      </div>
+    </section>
     <section class="panel wide" id="golive-panel">
       <div class="panel-head">
         <h3>Puerta a real · ¿listo para dinero real?</h3>
         <span class="muted" id="golive-status">—</span>
       </div>
+      <div class="gbar"><div class="gbar-fill" id="golive-bar"></div><span id="golive-pct">0 %</span></div>
       <p class="muted">Se evalúa cada hora sobre esta cuenta paper. Cuando todo esté en verde verás un aviso aquí arriba
         (y en el móvil si configuras <code>NOTIFY_WEBHOOK_URL</code>). Nada se activa solo: pasar a real es decisión tuya.</p>
       <div class="scroll-x">

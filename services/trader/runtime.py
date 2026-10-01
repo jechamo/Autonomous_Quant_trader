@@ -120,7 +120,12 @@ class TraderRuntime:
             snap["lab"] = self.lab.status()
         if self.golive is not None and self.golive.report is not None:
             r = self.golive.report
-            snap["golive"] = {"ready": r.ready, "passed": r.passed, "total": len(r.criteria)}
+            snap["golive"] = {
+                "ready": r.ready,
+                "passed": r.passed,
+                "total": len(r.criteria),
+                "progress": r.progress,
+            }
         info = getattr(self.feed, "info", None)
         if info is not None:
             sim = info()

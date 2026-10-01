@@ -12,11 +12,11 @@ existen y que el resumen cuadra con las filas.
 <!-- summary:start -->
 | Estado | Requisitos |
 |---|---|
-| ✅ | 191 |
+| ✅ | 192 |
 | 🟡 | 32 |
 | ⏳ | 38 |
 | 🚫 | 7 |
-| **Total** | **268** |
+| **Total** | **269** |
 
 | Sección | ✅ | 🟡 | ⏳ | 🚫 | Total |
 |---|---|---|---|---|---|
@@ -31,7 +31,7 @@ existen y que el resumen cuadra con las filas.
 | §9 | 7 | 3 | 4 | 0 | 14 |
 | §10 | 13 | 0 | 6 | 7 | 26 |
 | §11 | 23 | 1 | 3 | 0 | 27 |
-| §12 | 23 | 4 | 1 | 0 | 28 |
+| §12 | 24 | 4 | 1 | 0 | 29 |
 | §13 | 6 | 0 | 0 | 0 | 6 |
 | §14 | 5 | 0 | 1 | 0 | 6 |
 | §15 | 0 | 2 | 2 | 0 | 4 |
@@ -237,6 +237,7 @@ existen y que el resumen cuadra con las filas.
 | R12.26 | Research multi-timeframe con un único FDR global | ✅ | `packages/aqt/research/study.py::apply_global_fdr`, `packages/aqt/lab/cycle.py::run_research_cycle` | `tests/test_swing.py::test_multi_timeframe_cycle_finds_a_cross_sectional_leader` | Cripto 1min/1h/4h, acciones 15min/1h; todas las hipótesis de todos los timeframes cuentan en el mismo BH |
 | R12.27 | Swing: reglas ≥ 1 h mantienen posiciones entre sesiones | ✅ | `packages/aqt/stream/engine.py::StreamingEngine`, `packages/aqt/stream/dsl_strategy.py::DslStreamStrategy` | `tests/test_swing.py::test_swing_positions_survive_the_close_intraday_ones_do_not` | Las intradía se cierran antes del cierre; las swing no, y sólo entran con mercado abierto |
 | R12.28 | Paridad research ↔ vivo de las features entre valores | ✅ | `packages/aqt/stream/dsl_strategy.py::ResearchBarBook` | `tests/test_swing.py::test_live_cross_sectional_rule_matches_research` | El libro reconstruye el panel con todas las series del timeframe; mismas entradas que el research |
+| R12.29 | Progreso del aprendizaje visible (embudo de hipótesis, reglas hacia champion, ML, IA, actividad) | ✅ | `packages/aqt/lab/progress.py::learning_progress`, `apps/dashboard/local/app.js` | `tests/test_progress.py::test_funnel_accumulates_every_cycle_and_rule_transitions`, `tests/test_progress.py::test_ml_progress_counts_examples_against_what_the_trainer_needs`, `tests/test_progress.py::test_rule_progress_and_learning_api` | Panel «Aprendizaje»: circuito cuyos nodos se iluminan y reciben chispas con cada novedad, y bolas que se llenan (reglas, machine learning, camino a real); detalle solo al pasar el ratón. `GET /api/learning` |
 
 ## §13 Bayesian Evidence Engine
 
@@ -435,7 +436,7 @@ lectura para `authenticated`, sin acceso `anon` y escritura sólo vía `service_
 | R31.06 | Ausencia de errores de reconciliación | ✅ | `services/trader/golive_monitor.py::GoLiveMonitor` | `tests/test_golive.py::test_monitor_records_incidents_and_notifies_once_per_flip` | Descuadres que persisten dos muestras (15 s) quedan en `ops_events`; la puerta exige 0 y un broker externo (Alpaca paper) |
 | R31.07 | Kill switch probado end-to-end | 🟡 | `packages/aqt/stream/engine.py::StreamingEngine`, `services/trader/runtime.py::TraderRuntime` | `tests/test_stream.py::test_kill_switch_pause_and_throttle_block_entries`, `tests/test_golive.py::test_runtime_api_kill_switch_events_and_loop` | Activar/desactivar queda auditado y la puerta exige haberlo probado en la cuenta paper; falta con broker real |
 | R31.08 | Recuperación del broker probada | 🟡 | `services/trader/golive_monitor.py::GoLiveMonitor` | `tests/test_golive.py::test_monitor_records_incidents_and_notifies_once_per_flip` | Caídas y recuperaciones del broker se registran (`broker_down`/`broker_recovered`); falta un simulacro forzado |
-| R31.09 | Gate automatizado (checklist ejecutable) | ✅ | `packages/aqt/stream/golive.py::evaluate_gate`, `apps/dashboard/local/index.html` | `tests/test_golive.py::test_gate_passes_with_a_month_of_consistent_beating_paper`, `tests/test_golive.py::test_runtime_api_kill_switch_events_and_loop` | 10 criterios evaluados cada hora; panel «Puerta a real» y `GET /api/golive` |
+| R31.09 | Gate automatizado (checklist ejecutable) | ✅ | `packages/aqt/stream/golive.py::evaluate_gate`, `apps/dashboard/local/index.html` | `tests/test_golive.py::test_gate_passes_with_a_month_of_consistent_beating_paper`, `tests/test_golive.py::test_runtime_api_kill_switch_events_and_loop` | 10 criterios evaluados cada hora con su grado de avance; panel «Puerta a real» con barra de progreso, bola «Camino a real» y `GET /api/golive` |
 | R31.10 | Config LIVE inicial: 100 €, límites estrictos, pocas posiciones | ✅ | `packages/aqt/risk/profile.py::RiskProfile` | `tests/test_risk.py::test_small_account_100_eur` | `configuration.aggressiveness` por defecto 20 |
 | R31.11 | Aviso al operador cuando la puerta cambia de estado | ✅ | `services/trader/notify.py::make_notifier`, `services/trader/golive_monitor.py::GoLiveMonitor` | `tests/test_golive.py::test_notifier_ntfy_json_and_failures`, `tests/test_golive.py::test_monitor_records_incidents_and_notifies_once_per_flip` | Un aviso por cambio (listo / ya no listo): banner en el dashboard, log y webhook opcional `NOTIFY_WEBHOOK_URL` (ntfy al móvil, Slack, Discord) |
 

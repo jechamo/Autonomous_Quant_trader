@@ -455,8 +455,11 @@ async function renderGoLive() {
   $("golive-status").innerHTML = (g.ready
     ? `<span class="gate-ok">LISTO PARA REAL</span>`
     : `<span class="gate-no">Aún no</span>`) + ` · ${g.passed}/${g.total} criterios · evaluado ${when}`;
+  const gp = Math.round((g.progress || 0) * 100);
+  $("golive-bar").style.width = gp + "%";
+  $("golive-pct").textContent = gp + " %";
   $("golive-table").querySelector("tbody").innerHTML = (g.criteria || []).map((c) => `<tr>
-      <td class="${c.ok ? "gate-ok" : "gate-no"}">${c.ok ? "✓" : "✗"}</td>
+      <td><div class="mini" title="${Math.round(c.progress * 100)} %"><b style="width:${Math.round(c.progress * 100)}%"></b></div></td>
       <td>${esc(c.label)}</td><td>${esc(c.value)}</td><td class="muted">${esc(c.target)}</td>
       <td class="muted">${esc(c.detail || "")}</td></tr>`).join("");
   if (g.ready) {
@@ -467,3 +470,212 @@ async function renderGoLive() {
 }
 renderGoLive();
 setInterval(renderGoLive, 60000);
+
+// --- learning circuit: nodes light up, sparks run along the traces, orbs fill ----------------
+const SVGNS = "http://www.w3.org/2000/svg";
+const CIRCUIT = {
+  nodes: [
+    { id: "ia", x: 70, y: 48, label: "IA", color: "var(--warn)" },
+    { id: "ideas", x: 70, y: 160, label: "Ideas" },
+    { id: "filtro", x: 210, y: 160, label: "Filtro" },
+    { id: "valid", x: 350, y: 160, label: "Validación" },
+    { id: "motor", x: 490, y: 160, label: "Motor real" },
+    { id: "prueba", x: 630, y: 160, label: "En prueba" },
+    { id: "paper", x: 790, y: 160, label: "Opera", color: "var(--up)" },
+    { id: "ml", x: 630, y: 262, label: "ML", color: "var(--shadow)" },
+  ],
+  edges: {
+    ia: "M70,74 L70,134",
+    ideas: "M96,160 L184,160",
+    filtro: "M236,160 L324,160",
+    valid: "M376,160 L464,160",
+    motor: "M516,160 L604,160",
+    prueba: "M656,160 L764,160",
+    ml_down: "M622,186 L622,236",
+    ml_up: "M638,236 L638,186",
+  },
+  edgeTo: {
+    ia: "ideas", ideas: "filtro", filtro: "valid", valid: "motor", motor: "prueba",
+    prueba: "paper", ml_down: "ml", ml_up: "prueba",
+  },
+};
+const learnSeen = new Set();
+let learnFirst = true;
+let learnLit = [];
+
+function svgEl(tag, attrs, parent) {
+  const el = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, v);
+  if (parent) parent.appendChild(el);
+  return el;
+}
+
+function buildCircuit() {
+  const svg = $("circuit");
+  if (!svg || svg.dataset.built) return;
+  svg.dataset.built = "1";
+  const defs = svgEl("defs", {}, svg);
+  const glow = svgEl("filter", { id: "glow", x: "-50%", y: "-50%", width: "200%", height: "200%" }, defs);
+  svgEl("feGaussianBlur", { stdDeviation: "3", result: "b" }, glow);
+  const merge = svgEl("feMerge", {}, glow);
+  svgEl("feMergeNode", { in: "b" }, merge);
+  svgEl("feMergeNode", { in: "SourceGraphic" }, merge);
+  const blur = svgEl("filter", { id: "blur", x: "-100%", y: "-100%", width: "300%", height: "300%" }, defs);
+  svgEl("feGaussianBlur", { stdDeviation: "9" }, blur);
+  // decorative board traces (always dim) for the circuit look
+  const deco = ["M20,110 L150,110 L170,90 L420,90", "M300,230 L520,230 L540,250 L560,250",
+    "M700,90 L840,90", "M160,215 L260,215", "M720,230 L840,230 L850,220"];
+  for (const d of deco) svgEl("path", { d, class: "trace", "stroke-width": 1.5, opacity: 0.5 }, svg);
+  for (const [x, y] of [[20, 110], [420, 90], [560, 250], [840, 90], [160, 215], [260, 215], [850, 220]]) {
+    svgEl("circle", { cx: x, cy: y, r: 3, class: "pad" }, svg);
+  }
+  for (const [id, d] of Object.entries(CIRCUIT.edges)) {
+    const node = CIRCUIT.nodes.find((n) => n.id === CIRCUIT.edgeTo[id]);
+    const p = svgEl("path", { d, id: `tr-${id}`, class: "trace" }, svg);
+    if (node.color) p.style.setProperty("--node", node.color);
+  }
+  for (const n of CIRCUIT.nodes) {
+    const g = svgEl("g", { id: `nd-${n.id}`, class: "node" }, svg);
+    if (n.color) g.style.setProperty("--node", n.color);
+    svgEl("circle", { cx: n.x, cy: n.y, r: 30, class: "halo" }, g);
+    svgEl("circle", { cx: n.x, cy: n.y, r: 26, class: "core" }, g);
+    svgEl("text", { x: n.x, y: n.y, class: "num" }, g).textContent = "0";
+    svgEl("text", { x: n.x, y: n.y + (n.id === "ia" ? -36 : 44), class: "lbl" }, g).textContent = n.label;
+    svgEl("title", {}, g);
+  }
+  setInterval(() => { // idle life: a spark runs along a random lit trace
+    if (learnLit.length && !document.hidden) spark(learnLit[Math.floor(Math.random() * learnLit.length)]);
+  }, 2200);
+}
+
+function spark(edge, delay = 0) {
+  const path = document.getElementById(`tr-${edge}`);
+  if (!path) return;
+  setTimeout(() => {
+    const c = svgEl("circle", { r: 4.5, class: "spark" }, $("circuit"));
+    const anim = svgEl("animateMotion", {
+      dur: "0.9s", path: path.getAttribute("d"), fill: "freeze", begin: "indefinite",
+    }, c);
+    anim.beginElement();
+    setTimeout(() => c.remove(), 950);
+    const to = document.getElementById(`nd-${CIRCUIT.edgeTo[edge]}`);
+    if (to) {
+      setTimeout(() => {
+        to.classList.remove("flash");
+        void to.getBBox();
+        to.classList.add("flash");
+      }, 850);
+    }
+  }, delay);
+}
+
+function compact(n) {
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
+  if (n >= 1e4) return Math.round(n / 1e3) + "k";
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + "k";
+  return String(n);
+}
+
+function setNode(id, n, max, tip) {
+  const g = document.getElementById(`nd-${id}`);
+  if (!g) return;
+  g.classList.toggle("on", n > 0);
+  g.style.setProperty("--glow", (0.25 + 0.65 * Math.log10(n + 1) / Math.log10(max + 2)).toFixed(2));
+  g.querySelector(".num").textContent = compact(n);
+  g.querySelector("title").textContent = tip;
+}
+
+function orb(id, p, label, tip, dots) {
+  const box = $(id);
+  if (!box) return;
+  if (!box.firstChild) {
+    box.innerHTML = `<svg viewBox="0 0 120 120"><defs><clipPath id="clip-${id}"><circle cx="60" cy="60" r="54"/></clipPath></defs>
+      <circle class="shell" cx="60" cy="60" r="57"/>
+      <g clip-path="url(#clip-${id})"><g class="level" transform="translate(0,112)">
+        <path class="wave back" d="M0,8 Q15,0 30,8 T60,8 T90,8 T120,8 T150,8 T180,8 T210,8 T240,8 V140 H0 Z"/>
+        <path class="wave" d="M0,8 Q15,16 30,8 T60,8 T90,8 T120,8 T150,8 T180,8 T210,8 T240,8 V140 H0 Z"/>
+      </g></g><text class="pct" x="60" y="60">0%</text><title></title></svg>
+      <div class="lbl"></div><div class="dots"></div>`;
+  }
+  const pct = Math.round(Math.max(0, Math.min(1, p)) * 100);
+  const txt = box.querySelector(".pct");
+  if (txt.textContent !== pct + "%" && !learnFirst) {
+    box.classList.remove("bump");
+    void box.offsetWidth;
+    box.classList.add("bump");
+  }
+  txt.textContent = pct + "%";
+  box.querySelector(".level").setAttribute("transform", `translate(0,${(112 - 104 * pct / 100).toFixed(1)})`);
+  box.querySelector("title").textContent = tip;
+  box.querySelector(".lbl").textContent = label;
+  box.querySelector(".dots").innerHTML = (dots || [])
+    .map((d) => `<i class="${d.on ? "on" : ""}" title="${esc(d.tip)}"></i>`).join("");
+}
+
+const FEED_SPARKS = {
+  research: [["ideas", 0], ["filtro", 500], ["valid", 1000]],
+  ai: [["ia", 0]],
+  rule: [["motor", 0], ["prueba", 600]],
+  ml: [["ml_down", 0], ["ml_up", 900]],
+  lesson: [["valid", 0]],
+  trade_shadow: [["motor", 0]],
+  trade_paper: [["prueba", 0]],
+};
+
+async function renderLearning() {
+  let L, G;
+  try {
+    [L, G] = await Promise.all([
+      fetch("/api/learning").then((r) => r.json()),
+      fetch("/api/golive").then((r) => r.json()),
+    ]);
+  } catch { return; }
+  const panel = $("learn-panel");
+  if (!L.enabled) { panel.classList.add("hidden"); return; }
+  panel.classList.remove("hidden");
+  buildCircuit();
+  const st = L.funnel.stages.map((s) => s.n);
+  const max = Math.max(1, ...st);
+  ["ideas", "filtro", "valid", "motor", "prueba", "paper"].forEach((id, i) => setNode(
+    id, st[i], max,
+    `${L.funnel.stages[i].label}: ${st[i].toLocaleString("es-ES")}` + (i === 0 ? ` (${L.funnel.cycles} ciclos)` : ""),
+  ));
+  setNode("ia", L.ai.proposed, max, `Ideas de la IA: ${L.ai.proposed} · probadas ${L.ai.tested} · aprobadas ${L.ai.promoted}`);
+  setNode("ml", L.ml.filters, max, `Filtros aprendidos: ${L.ml.filters} · intentos ${L.ml.attempts}`);
+  if (L.ml.attempts > 0) document.getElementById("nd-ml").classList.add("on");
+  learnLit = Object.keys(CIRCUIT.edges).filter((e) => {
+    const g = document.getElementById(`nd-${CIRCUIT.edgeTo[e]}`);
+    const on = !!(g && g.classList.contains("on"));
+    document.getElementById(`tr-${e}`).classList.toggle("on", on);
+    return on;
+  });
+  if (!learnLit.length) learnLit = ["ideas"]; // the lab is alive even before the first hit
+
+  // new things arriving → sparks along the matching traces
+  for (const it of L.feed.slice().reverse()) {
+    if (learnSeen.has(it.id)) continue;
+    learnSeen.add(it.id);
+    if (!learnFirst) (FEED_SPARKS[it.kind] || []).forEach(([e, d]) => spark(e, d));
+  }
+
+  const rules = L.rules || [];
+  const best = rules.length ? Math.max(...rules.map((r) => r.progress)) : 0;
+  orb("orb-rules", best, "Reglas",
+    rules.length
+      ? rules.map((r) => `${r.rule_id}: ${Math.round(r.progress * 100)}% (${r.n_trades} op.)`).join("\n")
+      : "Ninguna regla en prueba todavía",
+    rules.map((r) => ({ on: r.status === "champion", tip: `${r.rule_id} ${Math.round(r.progress * 100)}%` })));
+  const ml = L.ml.strategies || [];
+  const mlp = ml.length ? ml.reduce((a, s) => a + s.progress, 0) / ml.length : 0;
+  orb("orb-ml", mlp, "Machine learning",
+    ml.map((s) => `${s.strategy_id}: ${s.examples}/${s.needed} ejemplos · ${s.state}`).join("\n") || "Sin estrategias",
+    ml.map((s) => ({ on: s.progress >= 1, tip: `${s.strategy_id}: ${s.examples}/${s.needed}` })));
+  if (G && G.enabled) {
+    orb("orb-real", G.progress, "Camino a real",
+      (G.criteria || []).map((c) => `${c.ok ? "✓" : "·"} ${c.label}: ${c.value}`).join("\n"),
+      (G.criteria || []).map((c) => ({ on: c.ok, tip: c.label })));
+  } else $("orb-real").classList.add("hidden");
+  learnFirst = false;
+}
+renderLearning();
+setInterval(renderLearning, 5000);

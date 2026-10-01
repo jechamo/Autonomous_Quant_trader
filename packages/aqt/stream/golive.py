@@ -45,6 +45,11 @@ class Criterion:
     value: str
     target: str
     detail: str = ""
+    progress: float = 0.0  # 0..1, how close it is (1 when ok)
+
+    def __post_init__(self) -> None:
+        p = 1.0 if self.ok else max(0.0, min(0.99, self.progress))
+        object.__setattr__(self, "progress", 0.0 if math.isnan(p) else p)
 
 
 @dataclass
@@ -62,6 +67,11 @@ class GateReport:
     def passed(self) -> int:
         return sum(c.ok for c in self.criteria)
 
+    @property
+    def progress(self) -> float:
+        """Average closeness over the criteria (the dashboard's progress bar)."""
+        return sum(c.progress for c in self.criteria) / len(self.criteria) if self.criteria else 0.0
+
     def summary(self) -> str:
         if self.ready:
             return f"READY for live ({self.passed}/{len(self.criteria)})"
@@ -75,6 +85,7 @@ class GateReport:
             "ready": self.ready,
             "passed": self.passed,
             "total": len(self.criteria),
+            "progress": self.progress,
             "live_broker_available": self.live_broker_available,
             "criteria": [asdict(c) for c in self.criteria],
         }
@@ -136,11 +147,11 @@ def evaluate_gate(
 
     days = (now - start) / DAY
     add(Criterion("days", "Tiempo en paper", days >= cfg.min_days, f"{days:.1f} días",
-                  f"≥ {cfg.min_days:g} días"))  # fmt: skip
+                  f"≥ {cfg.min_days:g} días", progress=days / cfg.min_days))  # fmt: skip
 
     n = len(trades)
     add(Criterion("trades", "Operaciones cerradas", n >= cfg.min_trades, str(n),
-                  f"≥ {cfg.min_trades}"))  # fmt: skip
+                  f"≥ {cfg.min_trades}", progress=n / cfg.min_trades))  # fmt: skip
 
     net = sum(t["pnl"] for t in trades)
     add(Criterion("net", "Resultado neto tras costes", n > 0 and net > 0, f"{net:+.2f}", "> 0",
@@ -152,7 +163,8 @@ def evaluate_gate(
         p = float(stats.ttest_1samp(rets, 0.0, alternative="greater").pvalue)
         p = 1.0 if math.isnan(p) else p
     add(Criterion("edge", "Ventaja estadística", p < cfg.max_p_value, f"p = {p:.3f}",
-                  f"p < {cfg.max_p_value:g}", "t-test: media de retornos netos > 0"))  # fmt: skip
+                  f"p < {cfg.max_p_value:g}", "t-test: media de retornos netos > 0",
+                  progress=(1 - p) / (1 - cfg.max_p_value)))  # fmt: skip
 
     weekly: list[float] = []
     for i in range(cfg.weeks):
@@ -164,7 +176,8 @@ def evaluate_gate(
                   covered and positive >= cfg.min_positive_weeks,
                   f"{positive} de {cfg.weeks}" if covered else "aún sin 4 semanas",
                   f"≥ {cfg.min_positive_weeks} de {cfg.weeks}",
-                  "P&L semanal: " + ", ".join(f"{w:+.0f}" for w in reversed(weekly))))  # fmt: skip
+                  "P&L semanal: " + ", ".join(f"{w:+.0f}" for w in reversed(weekly)),
+                  progress=min(positive, days // 7) / cfg.min_positive_weeks))  # fmt: skip
 
     starts = [e["ts"] for e in events if e["kind"] == "session_start"]
     eq_f, bh_f = session_returns(equity, starts, cfg.session_gap_s)
@@ -176,7 +189,8 @@ def evaluate_gate(
 
     dd = max_drawdown(eq_f)
     add(Criterion("drawdown", "Caída máxima", bool(eq_f) and dd <= max_dd, f"{dd:.1%}",
-                  f"≤ {max_dd:.0%}", "límite del perfil de riesgo actual"))  # fmt: skip
+                  f"≤ {max_dd:.0%}", "límite del perfil de riesgo actual",
+                  progress=max_dd / dd if eq_f and dd > 0 else 0.0))  # fmt: skip
 
     add(Criterion("venue", "Órdenes reales a un broker paper", external_venue,
                   "Alpaca paper" if external_venue else "fills simulados", "broker externo",

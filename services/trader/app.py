@@ -113,6 +113,12 @@ def create_app(runtime: TraderRuntime, push_seconds: float = 0.5) -> FastAPI:
         hyps: list[dict[str, Any]] = runtime.lab.overview()["hypotheses"]
         return hyps
 
+    @app.get("/api/learning")
+    async def learning() -> dict[str, Any]:
+        if runtime.lab is None:
+            return {"enabled": False}
+        return {"enabled": True, **runtime.lab.progress()}
+
     @app.get("/api/golive")
     async def golive() -> dict[str, Any]:
         if runtime.golive is None:
