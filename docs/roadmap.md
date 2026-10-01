@@ -3,7 +3,7 @@
 | Paso | Descripción | Estado |
 |---|---|---|
 | 1 | Repositorio, CI, tests, `.env.example`, exclusión de secretos | ✅ iteración 1 |
-| 2 | Proyecto Supabase: esquema, RLS, auditoría de configuración | 🟡 migración escrita y validada en Postgres 16; falta crear el proyecto y aplicarla |
+| 2 | Proyecto Supabase: esquema, RLS, auditoría de configuración | 🟡 migración idempotente validada en Postgres 16; pendiente aplicarla en el proyecto |
 | 3 | Research Engine + CLI con informe reproducible | ✅ |
 | 4 | Strategy DSL | ✅ |
 | 5 | Statistical Validation Engine | ✅ (OOS, WF, purged CV, Bayes, MC, FDR, costes, régimen) |

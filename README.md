@@ -73,6 +73,12 @@ docs/                  PRD, arquitectura, roadmap
 tests/
 ```
 
+## Supabase
+
+Pega el contenido completo de `supabase/migrations/20261001000000_initial_schema.sql` en el
+SQL Editor de un proyecto dedicado. Es atómica y re-ejecutable; si el proyecto ya tiene tablas
+ajenas con alguno de nuestros nombres, aborta sin crear nada e indica cuáles chocan.
+
 ## Seguridad
 
 - Los secretos nunca están en el código ni en el frontend: `.env` está ignorado, CI ejecuta gitleaks.
