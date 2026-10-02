@@ -8,6 +8,9 @@ no se ha ejecutado con las claves reales de Alpaca y OpenAI. Este documento es p
 **Cómo usarlo:** abre Claude Code en la carpeta del repositorio y dile:
 «Lee `docs/pruebas-locales.md` y ejecútalo paso a paso».
 
+**Contexto:** antes de empezar, lee [`sesion-2026-10-02.md`](sesion-2026-10-02.md): qué se
+cambió en esta rama, por qué, y dónde mirar si algo falla.
+
 ## Reglas para el agente (obligatorias)
 
 1. **Sólo PAPER.** No pongas `LIVE_TRADING_ENABLED=true` ni `TRADING_MODE=LIVE`, no uses claves
