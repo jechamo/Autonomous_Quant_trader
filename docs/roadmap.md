@@ -114,8 +114,9 @@ rebota» o el patrón de las salidas a bolsa? Respuesta: estudio de reglas con e
 - ✅ Barras diarias en el lab con 5 años de historia (cripto y acciones).
 - ✅ Noticias reales (Alpaca News) como features deterministas (sin LLM, sin look-ahead, NaN
   sin cobertura) y familias de Chan (2003) y PEAD en acciones; sondeo en vivo cada minuto.
-- ⏳ «Noticias del día»: el Analista IA resume los titulares reales del día (con la fecha) y
-  propone hipótesis; nunca opera.
+- ✅ «Noticias del día»: cada día de mercado a las 08:45 de Nueva York el Analista IA lee los
+  titulares reales (con la fecha y si abre el mercado), resume lo importante, descarta lo que no
+  esté en los titulares y propone hipótesis que el lab examina; panel en el dashboard. Nunca opera.
 - ⏳ Prueba agrupada (panel) entre símbolos para las reglas diarias.
 
 ## Próximos pasos técnicos sugeridos

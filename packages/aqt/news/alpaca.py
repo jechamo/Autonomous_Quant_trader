@@ -80,16 +80,17 @@ def fetch_news(
     symbols: Sequence[str] = (),
     max_items: int = 100_000,
     transport: httpx.BaseTransport | None = None,
+    sort: str = "asc",
 ) -> list[NewsItem]:
-    """Every headline published in ``[start, end)`` (epoch s), oldest first; no ``symbols`` =
-    the whole feed. Retries politely on rate limits (HTTP 429)."""
+    """Headlines published in ``[start, end)`` (epoch s), oldest first (``sort="desc"``: the
+    latest ``max_items``); no ``symbols`` = the whole feed. Retries on rate limits (HTTP 429)."""
     from aqt.stream.binance import system_ssl_context
 
     headers = {"APCA-API-KEY-ID": key, "APCA-API-SECRET-KEY": secret}
     params: dict[str, Any] = {
         "start": datetime.fromtimestamp(start, UTC).isoformat().replace("+00:00", "Z"),
         "end": datetime.fromtimestamp(end, UTC).isoformat().replace("+00:00", "Z"),
-        "limit": PAGE_LIMIT, "sort": "asc", "include_content": "false",
+        "limit": PAGE_LIMIT, "sort": sort, "include_content": "false",
     }  # fmt: skip
     if symbols:
         params["symbols"] = ",".join(symbols)
@@ -107,10 +108,12 @@ def fetch_news(
             body = r.json()
             items.extend(parse_alpaca_news(body))
             token = body.get("next_page_token")
+            if len(items) >= max_items:
+                break
             if not token:
                 break
             params["page_token"] = token
-    return items
+    return items[:max_items]
 
 
 def load_alpaca_news(

@@ -57,6 +57,8 @@ uv run python -m services.trader research                     # un ciclo ahora (
 uv run python -m services.trader research --timeframes 1h,4h  # sólo swing
 uv run python -m services.trader research --timeframes 1d     # sólo diario (5 años de historia)
 uv run python -m services.trader analyst --dry-run            # qué leería el Analista IA
+uv run python -m services.trader news --dry-run               # fecha + titulares de hoy (gratis)
+uv run python -m services.trader news                         # «Noticias del día» con la IA
 uv run python -m services.trader simulate --learn --headless  # el bucle completo sobre 72 h reales
 ```
 
@@ -73,6 +75,10 @@ uv run python -m services.trader simulate --learn --headless  # el bucle complet
   aprendido y propone hasta 5 hipótesis nuevas en el DSL, que el lab examina con el mismo rigor.
   Nunca opera ni ve claves de broker. Modelo `OPENAI_MODEL_STRONG` (si no `_CHEAP`, si no
   `gpt-5-mini`); máximo 6 llamadas al día. `--no-analyst` lo desactiva.
+- **Noticias del día** (claves de Alpaca + `OPENAI_API_KEY`): cada día de mercado a las 08:45 de
+  Nueva York la IA lee los titulares reales de las últimas 24 h sabiendo la fecha, resume lo
+  importante y propone hipótesis. Sólo puede citar titulares que existen (lo inventado se
+  descarta y se muestra). Panel «Noticias del día» en el dashboard. Nunca opera.
 - **Challenger**: opera sólo en sombra hasta ganar evidencia forward. **Champion**: su evidencia
   convence al Risk Engine y opera en paper. **Retirada**: deja de funcionar (o de dar señales).
 - **Meta-learning**: cada hora, de las operaciones ganadoras y perdedoras de cada estrategia

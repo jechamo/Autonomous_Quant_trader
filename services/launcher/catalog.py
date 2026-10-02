@@ -217,7 +217,7 @@ MODES: tuple[Mode, ...] = (
                 "timeframes",
                 "--timeframes",
                 "Escalas de tiempo",
-                "Vacío = las del mercado (cripto 1min,1h,4h; acciones 15min,1h).",
+                "Vacío = las del mercado (cripto 1min,1h,4h,1d; acciones 15min,1h,1d).",
                 "text",
                 "",
             ),
@@ -253,6 +253,47 @@ MODES: tuple[Mode, ...] = (
             ),
         ),
         needs=("openai",),
+    ),
+    Mode(
+        "news",
+        "📰",
+        "Noticias del día",
+        "La IA lee los titulares reales de las últimas 24 h (Alpaca News) sabiendo qué día es, "
+        "resume lo importante y propone hipótesis que el lab examinará. Nunca opera.",
+        "Para empezar el día sabiendo qué noticias mueven el mercado (el trader lo hace solo "
+        "a las 8:45 de Nueva York, 14:45 en España).",
+        ("news",),
+        (
+            Field(
+                "market",
+                "--market",
+                "Mercado",
+                "Acciones: además de las noticias generales, las de los valores que opera el bot.",
+                "choice",
+                "stocks",
+                (("stocks", "Acciones · EE. UU."), ("binance", "Cripto · Binance")),
+            ),
+            Field(
+                "dry_run",
+                "--dry-run",
+                "Solo ver los titulares (gratis)",
+                "Muestra la fecha y los titulares que leería la IA, sin llamarla.",
+                "bool",
+                True,
+                off_flag="--no-dry-run",
+            ),
+            Field(
+                "force",
+                "--force",
+                "Rehacer el de hoy",
+                "Genera un resumen nuevo aunque ya exista el de hoy (gasta una llamada).",
+                "bool",
+                False,
+                off_flag="--no-force",
+            ),
+        ),
+        needs=("alpaca", "openai"),
+        notes=("Los titulares son de Alpaca News: hacen falta las claves paper de Alpaca.",),
     ),
 )
 

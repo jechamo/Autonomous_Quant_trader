@@ -7,16 +7,16 @@ existen y que el resumen cuadra con las filas.
 
 **Leyenda:** ✅ hecho · 🟡 parcial · ⏳ pendiente · 🚫 excluido por diseño (y forzado en código)
 
-**Última actualización:** 2026-10-02 · Noticias reales como features y familias de noticias en el lab
+**Última actualización:** 2026-10-02 · Estudio de reglas, noticias reales en el lab y «Noticias del día»
 
 <!-- summary:start -->
 | Estado | Requisitos |
 |---|---|
-| ✅ | 212 |
+| ✅ | 215 |
 | 🟡 | 33 |
 | ⏳ | 37 |
 | 🚫 | 7 |
-| **Total** | **289** |
+| **Total** | **292** |
 
 | Sección | ✅ | 🟡 | ⏳ | 🚫 | Total |
 |---|---|---|---|---|---|
@@ -38,7 +38,7 @@ existen y que el resumen cuadra con las filas.
 | §16 | 1 | 1 | 0 | 0 | 2 |
 | §17 | 18 | 1 | 0 | 0 | 19 |
 | §18 | 4 | 1 | 0 | 0 | 5 |
-| §19 | 6 | 2 | 0 | 0 | 8 |
+| §19 | 9 | 2 | 0 | 0 | 11 |
 | §20 | 6 | 1 | 0 | 0 | 7 |
 | §21 | 19 | 0 | 5 | 0 | 24 |
 | §22 | 2 | 0 | 0 | 0 | 2 |
@@ -335,11 +335,14 @@ existen y que el resumen cuadra con las filas.
 | R19.01 | El LLM nunca envía órdenes | ✅ | `packages/aqt/analyst/hypotheses.py::run_analyst` | `tests/test_analyst.py::test_analyst_package_cannot_import_brokers_risk_or_the_engine` | Sin imports de brokers/riesgo/motor/servicios, ni directos ni transitivos; nunca ve claves de broker (sólo `OPENAI_API_KEY`) |
 | R19.02 | Análisis de operaciones, errores, régimen, anomalías, degradación | 🟡 | `packages/aqt/analyst/hypotheses.py::build_context` | `tests/test_analyst.py::test_run_analyst_stores_valid_rejects_invalid_and_dedupes` | Lee lecciones, checks que fallan, mejores pares, evidencia forward y sus hipótesis previas; falta análisis de operaciones y anomalías |
 | R19.03 | Generación de hipótesis y Challengers | ✅ | `packages/aqt/analyst/hypotheses.py::run_analyst` | `tests/test_analyst.py::test_run_analyst_stores_valid_rejects_invalid_and_dedupes` | Hipótesis en el DSL (familia `ai`) con grid ≤ 8 variantes; tabla `hypotheses` en SQLite |
-| R19.04 | Literatura, noticias, macro, lecciones | 🟡 | `packages/aqt/analyst/hypotheses.py::build_context` | — | Lecciones del lab sí; literatura, noticias y macro pendientes |
+| R19.04 | Literatura, noticias, macro, lecciones | 🟡 | `packages/aqt/analyst/hypotheses.py::build_context`, `packages/aqt/analyst/briefing.py::build_briefing_context` | `tests/test_briefing.py::test_context_tells_the_date_the_market_status_and_only_real_headlines` | Lecciones del lab y noticias reales del día (R19.09) sí; literatura y macro pendientes |
 | R19.05 | Salida estructurada | ✅ | `packages/aqt/analyst/hypotheses.py::validate_proposal` | `tests/test_analyst.py::test_invalid_proposals_are_rejected_with_a_reason` | JSON mode + validación estricta (Claim / Evidence / Suggested experiment + regla DSL); lo inválido se guarda con motivo. Tablas Supabase `ai_hypotheses` sin sincronizar aún |
 | R19.06 | El Research Engine confirma o rechaza las hipótesis | ✅ | `packages/aqt/lab/cycle.py::run_research_cycle` | `tests/test_analyst.py::test_cycle_tests_pending_ai_hypotheses_in_the_global_fdr` | Las hipótesis pendientes se examinan en el mismo FDR global; veredicto (`promoted`/`rejected`, checks que fallan) vuelve al analista |
-| R19.07 | Límites de coste del analista: presupuesto diario, deduplicación | ✅ | `packages/aqt/analyst/hypotheses.py::run_analyst` | `tests/test_analyst.py::test_run_analyst_respects_the_daily_budget_and_api_errors` | Máx. 6 llamadas/día por defecto; duplicados por contenido de la regla (no por nombre); errores de la API no rompen el ciclo |
+| R19.07 | Límites de coste del analista: presupuesto diario, deduplicación | ✅ | `packages/aqt/analyst/hypotheses.py::run_analyst`, `packages/aqt/analyst/briefing.py::run_briefing` | `tests/test_analyst.py::test_run_analyst_respects_the_daily_budget_and_api_errors`, `tests/test_briefing.py::test_run_briefing_stores_it_queues_hypotheses_and_respects_the_budget` | Máx. 6 llamadas/día por defecto, compartidas con el resumen de noticias (1 al día); duplicados por contenido de la regla (no por nombre); errores de la API no rompen el ciclo |
 | R19.08 | Panel «Analista IA» en el dashboard con el veredicto del lab | ✅ | `services/trader/app.py::create_app`, `services/trader/lab_scheduler.py::LabScheduler` | `tests/test_lab_service.py::test_lab_endpoints` | `GET /api/hypotheses` y `hypotheses` en `/api/research` |
+| R19.09 | «Noticias del día»: el analista resume los titulares reales del día sabiendo la fecha | ✅ | `packages/aqt/analyst/briefing.py::run_briefing`, `packages/aqt/analyst/briefing.py::validate_briefing`, `services/trader/cli.py::news` | `tests/test_briefing.py::test_run_briefing_stores_it_queues_hypotheses_and_respects_the_budget`, `tests/test_briefing.py::test_validation_discards_invented_ids_symbols_and_watchlist`, `tests/test_briefing.py::test_briefing_survives_api_errors_and_bad_answers`, `tests/test_briefing.py::test_news_cli_needs_keys_shows_the_date_and_runs_the_briefing` | Petición del usuario (2026-10-02). Recibe fecha y hora de Nueva York y UTC, si hoy abre el mercado y hasta 120 titulares de Alpaca News con su id; cada evento debe citar ids reales y sus símbolos deben estar en esos titulares (lo demás se descarta y se muestra). Sus hipótesis van a la cola del analista; nunca opera y su texto nunca es feature de backtest |
+| R19.10 | Panel «Noticias del día» y `GET /api/news` | ✅ | `services/trader/app.py::create_app`, `apps/dashboard/local/app.js` | `tests/test_briefing.py::test_api_news_serves_the_latest_briefing` | Resumen, eventos por importancia con enlace a los titulares citados, watchlist, lo descartado y el estado del sondeo de titulares |
+| R19.11 | Resumen de noticias automático cada día de mercado antes de la apertura | ✅ | `services/trader/lab_scheduler.py::LabScheduler`, `services/trader/lab_scheduler.py::news_runner` | `tests/test_briefing.py::test_scheduler_runs_the_briefing_once_per_new_york_weekday_after_08_45` | Lunes a viernes desde las 08:45 de Nueva York, un intento al día en un proceso aparte; sólo si hay claves de Alpaca y `OPENAI_API_KEY` |
 
 ## §20 Memoria (Supabase)
 
@@ -442,7 +445,7 @@ lectura para `authenticated`, sin acceso `anon` y escritura sólo vía `service_
 | R30.16 | Paso 15 — Claves distintas por entorno | 🟡 | `.env.example` | — | Variables separadas demo/live; falta gestor de secretos |
 | R30.17 | Paso 15 — Global kill switch en dashboard | ✅ | `services/trader/app.py::create_app`, `services/trader/runtime.py::TraderRuntime` | `tests/test_trader_service.py::test_api_state_control_and_persistence` | Local: botón en el dashboard, leído por el trader y persistido; columna Supabase auditada para la versión desplegada |
 | R30.18 | Paso 16 — Go-live gate | 🟡 | `packages/aqt/stream/golive.py::evaluate_gate`, `services/trader/golive_monitor.py::GoLiveMonitor` | `tests/test_golive.py::test_gate_passes_with_a_month_of_consistent_beating_paper` | Puerta automática con aviso; falta el adaptador de broker real (nada pasa a LIVE solo) |
-| R30.19 | Menú de arranque local con cada modo explicado (solo PAPER) | ✅ | `services/launcher/catalog.py::MODES`, `services/launcher/app.py::LauncherApp` | `tests/test_launcher.py::test_every_option_exists_in_the_real_cli_and_nothing_is_live`, `tests/test_launcher.py::test_menu_shows_modes_builds_the_command_and_launches` | `AQT.cmd` (doble clic) / `aqt.sh`: modos, para qué sirven, campos con ayuda y validación, comando visible; avisa si faltan claves |
+| R30.19 | Menú de arranque local con cada modo explicado (solo PAPER) | ✅ | `services/launcher/catalog.py::MODES`, `services/launcher/app.py::LauncherApp` | `tests/test_launcher.py::test_every_option_exists_in_the_real_cli_and_nothing_is_live`, `tests/test_launcher.py::test_menu_shows_modes_builds_the_command_and_launches` | `AQT.cmd` (doble clic) / `aqt.sh`: modos (incluido «Noticias del día»), para qué sirven, campos con ayuda y validación, comando visible; avisa si faltan claves |
 
 ## §31 Go-live gate y configuración LIVE inicial
 

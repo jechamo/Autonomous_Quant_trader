@@ -241,6 +241,7 @@ def run(
         every_s=research_every * 3600,
         baseline=baseline,
         seeder=lambda tf: _seed_book(book, syms, m, tf),
+        briefing=_briefing_runner(db, m, syms),
     )
     lab.sync()  # load the registry's active rules before the first tick
     golive = GoLiveMonitor(engine, store, make_notifier(), external_venue=broker == "alpaca")
@@ -275,6 +276,18 @@ def _news_loader(m: Market) -> Any:
         return load_alpaca_news(symbols, start_ms, end_ms, *creds)
 
     return load
+
+
+def _briefing_runner(db: Path, m: Market, syms: tuple[str, ...]) -> Any:
+    """The daily «Noticias del día» briefing, when both a headline source and a model exist."""
+    from aqt.analyst.client import analyst_config_from_env
+    from aqt.stream.alpaca import alpaca_credentials
+
+    from services.trader.lab_scheduler import news_runner
+
+    if alpaca_credentials() is None or analyst_config_from_env() is None:
+        return None
+    return news_runner(str(db), m.name, list(syms) if m.name == "stocks" else [])
 
 
 def _news_poller(syms: tuple[str, ...]) -> Any:
@@ -523,6 +536,97 @@ def analyst(
         typer.echo(json.dumps(ctx, indent=2, default=str, ensure_ascii=False)[:6000])
         return
     _run_analyst(store, m, tfs)
+
+
+def _market_open_today(creds: tuple[str, str], now: float) -> bool | None:
+    """Whether the US market trades today (Alpaca calendar); ``None`` if unknown."""
+    from datetime import datetime
+
+    from aqt.stream.alpaca import fetch_trading_days
+    from aqt.stream.session import NY
+
+    today = datetime.fromtimestamp(now, NY).date()
+    if today.weekday() >= 5:
+        return False
+    try:
+        return today in fetch_trading_days(*creds, today, today)
+    except Exception:  # the briefing still works; the model is told it is unknown
+        return None
+
+
+@app.command()
+def news(
+    market: str = typer.Option("stocks", help="stocks | binance (headlines come from Alpaca)"),
+    symbols: str = typer.Option(DEFAULT_SYMBOLS, help="Traded universe (stocks)"),
+    db: Path | None = typer.Option(None, help="SQLite with the lab's memory (shared with run)"),
+    hours: float = typer.Option(24.0, help="Headlines from the last N hours"),
+    dry_run: bool = typer.Option(False, help="Show the date and headlines; no AI call"),
+    force: bool = typer.Option(False, help="New briefing even if today's already exists"),
+) -> None:
+    """Morning briefing: the AI Analyst summarises today's real headlines. It never trades."""
+    import json
+    import time
+
+    from aqt.analyst.briefing import build_briefing_context, run_briefing, select_headlines
+    from aqt.analyst.client import OpenAIClient, analyst_config_from_env
+    from aqt.analyst.hypotheses import available_features
+    from aqt.news import alpaca as news_api
+    from aqt.stream.alpaca import HOW_TO_GET_KEYS, alpaca_credentials
+
+    m = _market(market)
+    creds = alpaca_credentials()
+    if creds is None:
+        typer.echo("news briefing: needs Alpaca keys (the headline source)")
+        typer.echo(HOW_TO_GET_KEYS)
+        raise typer.Exit(2)
+    universe = _market_symbols(m, symbols) if m.name == "stocks" else ()
+    now = time.time()
+    start = now - hours * 3600
+    try:
+        items = news_api.fetch_news(*creds, start, now, max_items=400, sort="desc")
+        if universe:
+            items += news_api.fetch_news(*creds, start, now, universe, max_items=400)
+    except Exception as exc:
+        typer.echo(f"could not download headlines: {exc}")
+        raise typer.Exit(1) from exc
+    market_open = _market_open_today(creds, now)
+    news_on = _news_loader(m) is not None
+    if dry_run:
+        ctx = build_briefing_context(
+            now, select_headlines(items, universe), universe, market_open,
+            available_features(m.session, news_on), m.timeframes,
+        )  # fmt: skip
+        typer.echo(json.dumps(ctx, indent=2, ensure_ascii=False)[:8000])
+        return
+    cfg = analyst_config_from_env()
+    if cfg is None:
+        typer.echo("news briefing: off (set OPENAI_API_KEY in .env)")
+        return
+    store = SQLiteStore(db or m.db)
+    try:
+        res = run_briefing(
+            store, OpenAIClient(cfg), cfg, items, now, market_open, universe, m.timeframes,
+            m.session, news_on, force,
+        )  # fmt: skip
+    finally:
+        store.close()
+    if res.skipped or res.briefing is None:
+        typer.echo(f"news briefing skipped: {res.skipped}")
+        return
+    b = res.briefing
+    typer.echo(f"Noticias del día {b.date} ({len(items)} titulares):\n{b.market_summary}\n")
+    for e in b.events:
+        typer.echo(
+            f"  [{e.importance}] {e.type:<9} {','.join(e.symbols) or '-':<14} {e.why_it_matters}"
+        )
+    if b.watchlist:
+        typer.echo(f"watchlist: {', '.join(b.watchlist)}")
+    for d in b.discarded:
+        typer.echo(f"  descartado: {d}")
+    for h in res.created:
+        typer.echo(f"  + hypothesis {h.name} [{h.timeframe}] {h.claim[:100]}")
+    for name, why in res.rejected:
+        typer.echo(f"  - {name or '?'}: {why[:100]}")
 
 
 @app.command()

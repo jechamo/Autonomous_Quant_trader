@@ -127,6 +127,21 @@ del mismo FDR global y escribe el veredicto. El paquete no importa brokers, ries
 servicios (test de imports directo y transitivo), sólo conoce `OPENAI_API_KEY` y tiene un
 presupuesto diario de llamadas.
 
+**Noticias del día** (`packages/aqt/analyst/briefing.py`, `python -m services.trader news`): un
+LLM no sabe qué ha pasado hoy, así que recibe la fecha (Nueva York y UTC), si abre el mercado y
+los titulares reales de las últimas 24 h (Alpaca News) con su id, y sólo puede usar esos. Cada
+evento de la respuesta debe citar ids existentes y sus símbolos deben aparecer en esos titulares;
+lo demás se descarta y se muestra como descartado. Se guarda en `news_briefings`, se sirve en
+`GET /api/news` y lo lanza el trader cada día de mercado a las 08:45 de Nueva York.
+
+### Noticias como features (`packages/aqt/news`)
+Titulares de Alpaca News (caché por símbolo y mes) → `NewsBook` → `news_1d`, `news_ratio`,
+`news_earnings_1d` a través de `augment`, igual en research, golden check y en vivo (un sondeo
+cada minuto). Sólo cuentan titulares publicados ≥ 5 min antes del cierre de la vela y fuera de
+la ventana cubierta el valor es NaN: la falta de datos nunca se lee como «sin noticias». La
+clasificación de titulares es por palabras clave (determinista y backtesteable); el LLM nunca
+puntúa noticias para un backtest porque conoce lo que pasó después.
+
 ### Puerta a real (`packages/aqt/stream/golive.py`, `services/trader/golive_monitor.py`)
 Checklist ejecutable del go-live gate (§31) sobre la cuenta paper, evaluado cada hora por el
 trader y servido en `GET /api/golive`:

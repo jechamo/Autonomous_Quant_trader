@@ -125,6 +125,17 @@ def create_app(runtime: TraderRuntime, push_seconds: float = 0.5) -> FastAPI:
             return {"enabled": False}
         return {"enabled": True, **runtime.golive.overview()}
 
+    @app.get("/api/news")
+    async def news() -> dict[str, Any]:
+        """The latest morning briefing (real headlines summarised by the AI Analyst)."""
+        from aqt.analyst.briefing import BriefingStore
+
+        return {
+            "briefing": BriefingStore(runtime.store).latest(),
+            "poller": runtime.news.status() if runtime.news is not None else None,
+            "scheduled": bool(runtime.lab is not None and runtime.lab.briefing is not None),
+        }
+
     @app.post("/api/research/run")
     async def research_run() -> dict[str, Any]:
         if runtime.lab is None:
