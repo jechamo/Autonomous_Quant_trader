@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Literal
 
 Kind = Literal["text", "int", "float", "bool", "choice"]
@@ -114,7 +114,18 @@ MODES: tuple[Mode, ...] = (
         "(dinero ficticio). Es el modo que cuenta para la puerta a real.",
         "Para la prueba seria antes de plantearte dinero real: unas 4 semanas como mínimo.",
         ("run", "--market", "stocks", "--broker", "alpaca"),
-        (CASH, AGGR, EVERY, port(8002), OPEN),
+        (
+            replace(
+                CASH,
+                default=10_000.0,
+                help=CASH.help + " Mantén siempre la misma cantidad: "
+                "la puerta a real evalúa la cuenta a lo largo de semanas.",
+            ),
+            AGGR,
+            EVERY,
+            port(8002),
+            OPEN,
+        ),
         needs=("alpaca",),
         url_port_field="port",
         notes=(

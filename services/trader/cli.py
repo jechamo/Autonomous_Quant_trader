@@ -157,6 +157,9 @@ def run(
     broker: str = typer.Option(
         "local", help="local (simulated fills) | alpaca (orders to your Alpaca PAPER account)"
     ),
+    keep_awake: bool = typer.Option(
+        True, help="Stop Windows from idle-sleeping while the trader runs (locking is fine)"
+    ),
 ) -> None:
     """Run the paper trader on live data with the local dashboard and the Research Lab."""
     import uvicorn
@@ -258,6 +261,11 @@ def run(
     typer.echo(f"go-live gate: {gate.summary()}")
     if open_browser:
         webbrowser.open(url)
+    if keep_awake:
+        from services.trader.keep_awake import keep_awake as _hold
+
+        if _hold():
+            typer.echo("keep-awake: the PC will not idle-sleep while the trader runs")
     uvicorn.run(create_app(runtime), host=host, port=port, log_level="warning")
 
 

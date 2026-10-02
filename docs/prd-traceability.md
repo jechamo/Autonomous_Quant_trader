@@ -7,16 +7,16 @@ existen y que el resumen cuadra con las filas.
 
 **Leyenda:** ✅ hecho · 🟡 parcial · ⏳ pendiente · 🚫 excluido por diseño (y forzado en código)
 
-**Última actualización:** 2026-10-02 · Prueba agrupada (panel) de las reglas diarias
+**Última actualización:** 2026-10-02 · Pruebas en local con datos reales y keep-awake del trader
 
 <!-- summary:start -->
 | Estado | Requisitos |
 |---|---|
-| ✅ | 218 |
+| ✅ | 219 |
 | 🟡 | 33 |
 | ⏳ | 37 |
 | 🚫 | 7 |
-| **Total** | **295** |
+| **Total** | **296** |
 
 | Sección | ✅ | 🟡 | ⏳ | 🚫 | Total |
 |---|---|---|---|---|---|
@@ -47,7 +47,7 @@ existen y que el resumen cuadra con las filas.
 | §26 | 4 | 0 | 2 | 0 | 6 |
 | §28 | 0 | 0 | 2 | 0 | 2 |
 | §29 | 2 | 0 | 7 | 0 | 9 |
-| §30 | 8 | 9 | 2 | 0 | 19 |
+| §30 | 9 | 9 | 2 | 0 | 20 |
 | §31 | 8 | 3 | 0 | 0 | 11 |
 | §32 | 1 | 0 | 0 | 0 | 1 |
 | §33 | 1 | 0 | 0 | 0 | 1 |
@@ -449,6 +449,7 @@ lectura para `authenticated`, sin acceso `anon` y escritura sólo vía `service_
 | R30.17 | Paso 15 — Global kill switch en dashboard | ✅ | `services/trader/app.py::create_app`, `services/trader/runtime.py::TraderRuntime` | `tests/test_trader_service.py::test_api_state_control_and_persistence` | Local: botón en el dashboard, leído por el trader y persistido; columna Supabase auditada para la versión desplegada |
 | R30.18 | Paso 16 — Go-live gate | 🟡 | `packages/aqt/stream/golive.py::evaluate_gate`, `services/trader/golive_monitor.py::GoLiveMonitor` | `tests/test_golive.py::test_gate_passes_with_a_month_of_consistent_beating_paper` | Puerta automática con aviso; falta el adaptador de broker real (nada pasa a LIVE solo) |
 | R30.19 | Menú de arranque local con cada modo explicado (solo PAPER) | ✅ | `services/launcher/catalog.py::MODES`, `services/launcher/app.py::LauncherApp` | `tests/test_launcher.py::test_every_option_exists_in_the_real_cli_and_nothing_is_live`, `tests/test_launcher.py::test_menu_shows_modes_builds_the_command_and_launches` | `AQT.cmd` (doble clic) / `aqt.sh`: modos (incluido «Noticias del día»), para qué sirven, campos con ayuda y validación, comando visible; avisa si faltan claves |
+| R30.20 | El trader sigue en marcha con el PC bloqueado (sin suspensión por inactividad) | ✅ | `services/trader/keep_awake.py::keep_awake`, `services/trader/cli.py::run` | `tests/test_keep_awake.py::test_keep_awake_asks_windows_and_can_be_released` | `--keep-awake` (por defecto): petición por proceso a Windows (`SetThreadExecutionState`); no cambia la configuración de energía y se retira al cerrar el bot. La tapa cerrada o «Suspender» siguen suspendiendo |
 
 ## §31 Go-live gate y configuración LIVE inicial
 
