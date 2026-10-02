@@ -245,3 +245,85 @@ def run_study(
         n_global_discoveries=n_discoveries,
         data_hashes=data_hashes,
     )
+
+
+def _panel_family(
+    features: dict[str, pd.DataFrame], rcfg: ResearchConfig
+) -> tuple[dict[str, Any] | None, str | None]:
+    from aqt.research.panel import run_panel_research
+
+    try:
+        return run_panel_research(features, rcfg).to_dict(), None
+    except Exception as exc:  # one bad family must not sink the study
+        return None, f"{type(exc).__name__}: {exc}"
+
+
+def run_panel_study(
+    data: Mapping[str, pd.DataFrame],
+    strategies: Sequence[str],
+    cfg: StudyConfig | None = None,
+    cost_for: Callable[[str], CostModel] | None = None,
+    instrument_for: Callable[[str], tuple[bool, str]] | None = None,
+    workers: int = 1,
+    specs: Mapping[str, tuple[StrategySpec, dict[str, list[float | int]]]] | None = None,
+) -> StudyReport:
+    """One pooled hypothesis set per strategy over every symbol (``symbol="*"``); see
+    :mod:`aqt.research.panel`. Its p-values join the same global FDR as per-symbol pairs."""
+    from aqt.features import FeatureEngine
+
+    cfg = cfg or StudyConfig()
+    usable = {s: df for s, df in data.items() if len(df) >= MIN_BARS}
+    instrument_for = instrument_for or (lambda s: (True, "USD"))
+    first = next(iter(usable), next(iter(data), ""))
+    tradable, currency = instrument_for(first) if first else (False, "")
+    costs = cost_for(first) if cost_for and first else CostModel()
+    features = {s: FeatureEngine().compute(df) for s, df in usable.items()}
+    pairs: list[PairResult] = []
+    jobs: list[tuple[PairResult, ResearchConfig]] = []
+    for strategy in strategies:
+        pair = PairResult("*", strategy, tradable, currency)
+        pairs.append(pair)
+        if len(usable) < 2:
+            pair.error = f"panel needs >= 2 symbols with {MIN_BARS} bars (got {len(usable)})"
+            continue
+        jobs.append(
+            (
+                pair,
+                ResearchConfig(
+                    symbol="*",
+                    timeframe=cfg.timeframe,
+                    strategy=strategy,
+                    catalog=cfg.catalog,
+                    spec=specs[strategy][0] if specs and strategy in specs else None,
+                    grid=specs[strategy][1] if specs and strategy in specs else None,
+                    oos_fraction=cfg.oos_fraction,
+                    walk_forward_windows=cfg.walk_forward_windows,
+                    fdr_q=cfg.fdr_q,
+                    min_trades=cfg.min_trades,
+                    monte_carlo_sims=cfg.monte_carlo_sims,
+                    seed=cfg.seed,
+                    costs=costs,
+                ),
+            )
+        )
+    if workers > 1 and len(jobs) > 1:
+        with ProcessPoolExecutor(max_workers=workers) as pool:
+            outcomes = list(pool.map(_panel_family, [features] * len(jobs), [c for _, c in jobs]))
+    else:
+        outcomes = [_panel_family(features, c) for _, c in jobs]
+    data_hashes: dict[str, str] = {}
+    for (pair, _), (report, error) in zip(jobs, outcomes, strict=True):
+        if error is not None:
+            pair.error = error
+            continue
+        pair.report = report
+        assert report is not None
+        data_hashes["*"] = report["meta"]["data_hash"]
+    n_hypotheses, n_discoveries = apply_global_fdr(pairs, cfg.fdr_q)
+    return StudyReport(
+        config=replace(cfg),
+        pairs=pairs,
+        n_hypotheses=n_hypotheses,
+        n_global_discoveries=n_discoveries,
+        data_hashes=data_hashes,
+    )

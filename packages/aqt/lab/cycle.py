@@ -34,14 +34,25 @@ from aqt.features.engine import FeatureEngine
 from aqt.lab.registry import RuleRecord, RuleRegistry, RuleStatus
 from aqt.news.book import NewsBook
 from aqt.news.items import NewsItem
-from aqt.research.study import StudyConfig, apply_global_fdr, run_study
+from aqt.research.study import StudyConfig, apply_global_fdr, run_panel_study, run_study
 from aqt.strategies.dsl import StrategySpec
 from aqt.strategies.intraday import INTRADAY_CATALOG
 from aqt.strategies.swing import SWING_CATALOG, swing_families_for
-from aqt.stream.dsl_strategy import DslStreamStrategy, ResearchBarBook, rule_id_for
+from aqt.stream.dsl_strategy import (
+    DslStreamStrategy,
+    PanelDslStrategy,
+    ResearchBarBook,
+    rule_id_for,
+)
 from aqt.stream.engine import EngineConfig, StreamingEngine
 from aqt.stream.events import Event
-from aqt.stream.history import TIMEFRAME_SECONDS, kline_events, resample_bars, resample_klines
+from aqt.stream.history import (
+    TIMEFRAME_SECONDS,
+    kline_events,
+    merge_events,
+    resample_bars,
+    resample_klines,
+)
 from aqt.stream.session import UsEquitySession
 from aqt.stream.stocks import bar_events, with_bvc
 from aqt.stream.store import SQLiteStore
@@ -63,6 +74,9 @@ class LabConfig:
     intraday_days: float = 7.0  # 1-minute research uses at most this much (1-second klines)
     daily_days: float = 1825.0  # daily bars need years: 252-bar warm-up + enough trades per symbol
     news_days: float = 1095.0  # headline history for the news_* features (needs a news loader)
+    # Timeframes researched pooled over the universe (one rule for all symbols, dates as the
+    # unit of evidence): daily anomalies fire too rarely per symbol to be tested one by one.
+    panel_timeframes: tuple[str, ...] = ("1d",)
     fee_pct: float = 0.001
     spread_pct: float = 0.0001
     slippage_pct: float = 0.0005
@@ -247,6 +261,49 @@ def golden_check(
     }
 
 
+def golden_check_panel(
+    data: LabData,
+    research_features: dict[str, pd.DataFrame],
+    spec: StrategySpec,
+    oos_start: pd.Timestamp,
+    end_ms: int,
+    cfg: LabConfig,
+    timeframe: str,
+) -> dict[str, Any]:
+    """Golden check of a pooled rule: every symbol's out-of-sample events through one engine,
+    with the rule as a single strategy (as it would trade live)."""
+    tf = _TIMEFRAMES[timeframe]
+    symbols = tuple(research_features)
+    book = ResearchBarBook()
+    for sym, feats in research_features.items():
+        book.preload(sym, tf, feats)
+    strat = PanelDslStrategy(spec=spec, symbols=symbols, timeframe_s=tf, book=book)
+    eng = StreamingEngine(
+        EngineConfig(
+            symbols=symbols,
+            bar_seconds=5.0,
+            fee_pct=cfg.fee_pct,
+            expected_slippage_pct=cfg.slippage_pct,
+            latency_s=cfg.latency_s,
+            run_id="golden",
+            session=cfg.session,
+        ),
+        strategies=[strat],
+    )
+    start = int(oos_start.timestamp() * 1000)
+    for event in merge_events([data.events(s, start, end_ms, timeframe) for s in symbols]):
+        eng.on_event(event)
+    eng.shutdown()
+    r = np.asarray(eng.evidence.returns(strat.strategy_id), dtype=float)
+    mean = float(r.mean()) if r.size else 0.0
+    return {
+        "n_trades": int(r.size),
+        "mean_net_return": mean,
+        "passed": bool(r.size >= cfg.golden_min_trades and mean > 0),
+        "symbols": len(symbols),
+    }
+
+
 def run_research_cycle(
     store: SQLiteStore,
     cfg: LabConfig,
@@ -336,7 +393,8 @@ def _cycle(
                 continue  # e.g. news features without a news source: stays pending
             ai_specs[h["name"]] = (spec, h["grid_obj"])
             tested_hyps[h["name"]] = h["id"]
-        study = run_study(
+        runner = run_panel_study if tf in cfg.panel_timeframes else run_study
+        study = runner(
             augmented[tf],
             [*families, *ai_specs],
             StudyConfig(
@@ -380,8 +438,12 @@ def _cycle(
         tf_s = _TIMEFRAMES[tf]
         spec = StrategySpec.model_validate(pair.report["selected_strategy"]["spec"])
         oos_start = pd.Timestamp(pair.report["out_of_sample"]["period"][0])
-        features = FeatureEngine().compute(augmented[tf][pair.symbol])
-        golden = golden_check(data, features, spec, pair.symbol, oos_start, end_ms, cfg, tf)
+        if pair.symbol == "*":
+            panel = {s: FeatureEngine().compute(f) for s, f in augmented[tf].items()}
+            golden = golden_check_panel(data, panel, spec, oos_start, end_ms, cfg, tf)
+        else:
+            features = FeatureEngine().compute(augmented[tf][pair.symbol])
+            golden = golden_check(data, features, spec, pair.symbol, oos_start, end_ms, cfg, tf)
         rid = rule_id_for(spec, pair.symbol, tf_s)
         research = {
             k: pair.summary().get(k)

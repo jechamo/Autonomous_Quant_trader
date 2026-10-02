@@ -7,16 +7,16 @@ existen y que el resumen cuadra con las filas.
 
 **Leyenda:** ✅ hecho · 🟡 parcial · ⏳ pendiente · 🚫 excluido por diseño (y forzado en código)
 
-**Última actualización:** 2026-10-02 · Auditoría de fuentes de todas las reglas y guía de despliegue en Railway
+**Última actualización:** 2026-10-02 · Prueba agrupada (panel) de las reglas diarias
 
 <!-- summary:start -->
 | Estado | Requisitos |
 |---|---|
-| ✅ | 215 |
+| ✅ | 218 |
 | 🟡 | 33 |
 | ⏳ | 37 |
 | 🚫 | 7 |
-| **Total** | **292** |
+| **Total** | **295** |
 
 | Sección | ✅ | 🟡 | ⏳ | 🚫 | Total |
 |---|---|---|---|---|---|
@@ -31,7 +31,7 @@ existen y que el resumen cuadra con las filas.
 | §9 | 7 | 3 | 4 | 0 | 14 |
 | §10 | 23 | 1 | 5 | 7 | 36 |
 | §11 | 28 | 1 | 3 | 0 | 32 |
-| §12 | 26 | 4 | 1 | 0 | 31 |
+| §12 | 29 | 4 | 1 | 0 | 34 |
 | §13 | 6 | 0 | 0 | 0 | 6 |
 | §14 | 5 | 0 | 1 | 0 | 6 |
 | §15 | 0 | 2 | 2 | 0 | 4 |
@@ -253,8 +253,11 @@ existen y que el resumen cuadra con las filas.
 | R12.27 | Swing: reglas ≥ 1 h mantienen posiciones entre sesiones | ✅ | `packages/aqt/stream/engine.py::StreamingEngine`, `packages/aqt/stream/dsl_strategy.py::DslStreamStrategy` | `tests/test_swing.py::test_swing_positions_survive_the_close_intraday_ones_do_not` | Las intradía se cierran antes del cierre; las swing no, y sólo entran con mercado abierto |
 | R12.28 | Paridad research ↔ vivo de las features entre valores | ✅ | `packages/aqt/stream/dsl_strategy.py::ResearchBarBook` | `tests/test_swing.py::test_live_cross_sectional_rule_matches_research` | El libro reconstruye el panel con todas las series del timeframe; mismas entradas que el research |
 | R12.29 | Progreso del aprendizaje visible (embudo de hipótesis, reglas hacia champion, ML, IA, actividad) | ✅ | `packages/aqt/lab/progress.py::learning_progress`, `apps/dashboard/local/app.js` | `tests/test_progress.py::test_funnel_accumulates_every_cycle_and_rule_transitions`, `tests/test_progress.py::test_ml_progress_counts_examples_against_what_the_trainer_needs`, `tests/test_progress.py::test_rule_progress_and_learning_api` | Panel «Aprendizaje»: circuito cuyos nodos se iluminan y reciben chispas con cada novedad, y bolas que se llenan (reglas, machine learning, camino a real); detalle solo al pasar el ratón. `GET /api/learning` |
-| R12.30 | Barras diarias en el lab con historia larga y familias sólo donde están documentadas | ✅ | `packages/aqt/lab/cycle.py::LabConfig`, `services/trader/cli.py::MARKETS` | `tests/test_swing.py::test_catalog_for_keeps_daily_and_equity_effects_where_documented` | `daily_days` = 5 años para 1d (warm-up de 252 barras + muestra); efectos diarios fuera de 1h/4h y de calendario de acciones fuera de cripto. Riesgo: muestra por símbolo pequeña; falta prueba agrupada entre símbolos |
+| R12.30 | Barras diarias en el lab con historia larga y familias sólo donde están documentadas | ✅ | `packages/aqt/lab/cycle.py::LabConfig`, `services/trader/cli.py::MARKETS` | `tests/test_swing.py::test_catalog_for_keeps_daily_and_equity_effects_where_documented` | `daily_days` = 5 años para 1d (warm-up de 252 barras + muestra); efectos diarios fuera de 1h/4h y de calendario de acciones fuera de cripto. La muestra por símbolo es pequeña: en 1d las reglas se prueban agrupadas (R12.32) |
 | R12.31 | Paridad research ↔ vivo de las features de noticias | ✅ | `packages/aqt/stream/dsl_strategy.py::ResearchBarBook`, `packages/aqt/stream/dsl_strategy.py::DslStreamStrategy` | `tests/test_news.py::test_live_news_rule_matches_research`, `tests/test_news.py::test_news_rule_never_signals_without_a_news_source` | El libro en vivo pasa su `NewsBook` a `augment`; una regla que necesita features ausentes nunca da señal |
+| R12.32 | Research agrupado (panel) de las reglas diarias sobre todo el universo | ✅ | `packages/aqt/research/panel.py::run_panel_research`, `packages/aqt/research/study.py::run_panel_study`, `packages/aqt/lab/cycle.py::LabConfig` | `tests/test_panel.py::test_pooling_finds_a_weak_effect_that_no_single_symbol_can_prove`, `tests/test_panel.py::test_one_frontier_for_all_symbols_and_dates_as_the_unit` | Mismo pipeline e informe que por símbolo; frontera IS/OOS y ventanas de walk-forward con fechas comunes; las operaciones se agregan por fecha de entrada (10 copias de un valor = la evidencia de uno); sus p-values entran en el FDR global. `panel_timeframes = ("1d",)` |
+| R12.33 | Golden check agrupado en el motor real | ✅ | `packages/aqt/lab/cycle.py::golden_check_panel` | `tests/test_panel.py::test_lab_promotes_one_pooled_rule_that_trades_every_symbol` | Un único motor con todos los valores y la regla como una sola estrategia |
+| R12.34 | Regla agrupada en vivo: una estrategia sobre todo el universo con evidencia conjunta | ✅ | `packages/aqt/stream/dsl_strategy.py::PanelDslStrategy`, `packages/aqt/lab/live.py::rule_strategies` | `tests/test_panel.py::test_pooled_rule_live_matches_research_on_every_symbol`, `tests/test_panel.py::test_lab_promotes_one_pooled_rule_that_trades_every_symbol` | Regla registrada con `symbol="*"`: ocupa un hueco, misma `strategy_id` en todos los valores (sombra, revisión y Risk Engine acumulan evidencia de todos); paridad con el research por valor |
 
 ## §13 Bayesian Evidence Engine
 

@@ -284,3 +284,55 @@ class DslStreamStrategy(StreamStrategy):
             self._exit_seq = seq
             self._exit_now = bool(self.spec.exit.exit_signal.evaluate(feats.tail(2)).iloc[-1])
         return self._exit_now
+
+
+@dataclass
+class PanelDslStrategy(StreamStrategy):
+    """One pooled rule (researched with ``symbol="*"``) traded on every symbol of the universe.
+
+    It is a single strategy for the engine — one ``strategy_id``, so its shadow evidence, review
+    and Risk Engine edge pool the trades of all symbols, exactly as the rule was validated —
+    built from one :class:`DslStreamStrategy` per symbol sharing the research bar book.
+    """
+
+    spec: StrategySpec
+    symbols: tuple[str, ...]
+    strategy_id: str = ""
+    timeframe_s: float = 86_400.0
+    engine_bar_s: float = 5.0
+    book: ResearchBarBook = field(default_factory=ResearchBarBook)
+    min_cost_multiple: float = 0.0
+    description: str = ""
+    overnight: bool | None = None
+
+    def __post_init__(self) -> None:
+        self.spec = self.spec.render()
+        if not self.strategy_id:
+            self.strategy_id = rule_id_for(self.spec, "*", self.timeframe_s)
+        self.legs = {
+            s: DslStreamStrategy(
+                spec=self.spec,
+                symbol=s,
+                strategy_id=self.strategy_id,
+                timeframe_s=self.timeframe_s,
+                engine_bar_s=self.engine_bar_s,
+                book=self.book,
+                overnight=self.overnight,
+            )
+            for s in self.symbols
+        }
+        if self.overnight is None:
+            self.overnight = self.timeframe_s >= 3600
+        if not self.description:
+            self.description = f"{self.spec.description or self.spec.name} (all symbols)"
+
+    def on_bar(self, bar: Bar) -> None:
+        self.book.on_bar(bar, self.timeframe_s)  # idempotent per engine bar
+
+    def entry(self, f: FeatureSnapshot) -> EntryIntent | None:
+        leg = self.legs.get(f.symbol)
+        return leg.entry(f) if leg is not None else None
+
+    def should_exit(self, f: FeatureSnapshot) -> bool:
+        leg = self.legs.get(f.symbol)
+        return leg.should_exit(f) if leg is not None else False

@@ -134,6 +134,14 @@ evento de la respuesta debe citar ids existentes y sus símbolos deben aparecer 
 lo demás se descarta y se muestra como descartado. Se guarda en `news_briefings`, se sirve en
 `GET /api/news` y lo lanza el trader cada día de mercado a las 08:45 de Nueva York.
 
+### Prueba agrupada (`packages/aqt/research/panel.py`)
+En barras diarias cada regla se investiga sobre todo el universo a la vez (`run_panel_study`):
+frontera IS/OOS y walk-forward con fechas comunes y una observación por fecha de entrada (media
+de las operaciones de ese día), con el mismo informe y el mismo FDR global que el research por
+símbolo. La superviviente pasa un golden check con todos los valores en un motor
+(`golden_check_panel`), se registra con `symbol="*"` y en vivo es una `PanelDslStrategy`: una
+sola estrategia (y una sola evidencia) sobre todo el universo.
+
 ### Noticias como features (`packages/aqt/news`)
 Titulares de Alpaca News (caché por símbolo y mes) → `NewsBook` → `news_1d`, `news_ratio`,
 `news_earnings_1d` a través de `augment`, igual en research, golden check y en vivo (un sondeo

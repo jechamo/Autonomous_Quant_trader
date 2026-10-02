@@ -7,7 +7,7 @@ from collections.abc import Iterable
 
 from aqt.lab.meta import MetaFilteredStrategy, load_model
 from aqt.lab.registry import RuleRecord, RuleRegistry
-from aqt.stream.dsl_strategy import DslStreamStrategy, ResearchBarBook
+from aqt.stream.dsl_strategy import DslStreamStrategy, PanelDslStrategy, ResearchBarBook
 from aqt.stream.engine import StreamingEngine
 from aqt.stream.strategies import StreamStrategy, default_stream_strategies
 
@@ -15,9 +15,23 @@ log = logging.getLogger(__name__)
 
 
 def _dsl(
-    r: RuleRecord, strategy_id: str, book: ResearchBarBook, bar_seconds: float
+    r: RuleRecord,
+    strategy_id: str,
+    book: ResearchBarBook,
+    bar_seconds: float,
+    universe: tuple[str, ...] = (),
 ) -> StreamStrategy:
     assert r.spec is not None
+    if r.symbol == "*":  # pooled rule: one strategy over the whole universe
+        return PanelDslStrategy(
+            spec=r.spec,
+            symbols=universe,
+            strategy_id=strategy_id,
+            timeframe_s=r.timeframe_s,
+            engine_bar_s=bar_seconds,
+            book=book,
+            description=f"[{r.status}] {r.spec.description or r.spec.name} (todos los valores)",
+        )
     return DslStreamStrategy(
         spec=r.spec,
         symbol=r.symbol,
@@ -37,18 +51,19 @@ def rule_strategies(
     Meta rules wrap a *fresh* instance of their parent (DSL rule or baseline strategy) with the
     learned filter, so parent and filtered version keep independent state and evidence.
     """
-    universe = set(symbols)
+    ordered = tuple(dict.fromkeys(symbols))
+    universe = set(ordered)
     baseline = {s.strategy_id for s in default_stream_strategies(bar_seconds)}
     out: list[StreamStrategy] = []
     for r in rules:
         if r.symbol != "*" and r.symbol not in universe:
             continue
         if not r.is_meta:
-            out.append(_dsl(r, r.rule_id, book, bar_seconds))
+            out.append(_dsl(r, r.rule_id, book, bar_seconds, ordered))
             continue
         base_id = str(r.meta["base"])
         if r.spec is not None:
-            inner = _dsl(r, base_id, book, bar_seconds)
+            inner = _dsl(r, base_id, book, bar_seconds, ordered)
         elif base_id in baseline:
             inner = next(
                 s for s in default_stream_strategies(bar_seconds) if s.strategy_id == base_id

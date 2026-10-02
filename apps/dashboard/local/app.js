@@ -388,7 +388,7 @@ async function renderLab() {
     const live = r.live || (r.metrics || {}).forward || {};
     return `<tr title="${esc(r.description || r.name)}">
       <td>${esc(r.name)}<div class="muted">${esc(r.rule_id)}</div></td>
-      <td>${esc(r.symbol)}</td>
+      <td>${r.symbol === "*" ? "todos (agrupada)" : esc(r.symbol)}</td>
       <td><span class="pill ${esc(r.status)}">${STATUS_ES[r.status] || esc(r.status)}</span></td>
       <td class="${cls(res.oos_ev)}">${pctOr(res.oos_ev)}</td>
       <td class="${cls(gold.mean_net_return)}">${gold.n_trades != null ? `${pctOr(gold.mean_net_return)} (${gold.n_trades})` : "—"}</td>

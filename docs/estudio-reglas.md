@@ -189,17 +189,24 @@ nuestra**; la § 6 hace lo mismo con todas las familias del sistema, también la
   backtests: las features del lab son deterministas (conteos y palabras clave) y el LLM sólo lee
   y resume. Una puntuación por LLM sólo podría evaluarse hacia delante, en sombra.
 
-## 5. Limitación principal y siguiente paso
+## 5. Muestra: prueba agrupada en barras diarias
 
-El lab prueba cada regla **símbolo a símbolo**. Las anomalías diarias disparan pocas veces al año
-por valor, así que con 10 acciones muchas variantes caerán por «muestra insuficiente», aunque el
-efecto exista en el conjunto. Mitigaciones en este bloque: las reglas de reversión también se
-prueban en 1h y 4h (más ocasiones, pero fuera de las condiciones de cualquier estudio), y las
-diarias usan 5 años de historia (`daily_days`).
+Probadas símbolo a símbolo, las reglas diarias disparan pocas veces al año por valor y casi
+todas caerían por «muestra insuficiente» aunque el efecto exista. Por eso, en barras diarias, el
+lab las prueba **agrupadas** sobre todo el universo, que es como se documentaron
+(`packages/aqt/research/panel.py`):
 
-Siguiente paso recomendado: **prueba agrupada (panel)**, es decir, una regla evaluada sobre todos
-los símbolos a la vez, que es como se documentaron estos efectos. También hace falta un universo
-con valores deslistados para evitar el sesgo de supervivencia (R12.11).
+- Una sola frontera entre entrenamiento y prueba, **la misma fecha para todos los valores**, y lo
+  mismo en el walk-forward: nada posterior a esa fecha informa la selección.
+- **La unidad de evidencia es la fecha, no la operación**: si ocho valores compran el mismo día
+  porque cae todo el mercado, cuenta como una observación (la media de ese día). Diez copias de
+  la misma acción no dan más significación que una, y un efecto simultáneo en todos los valores
+  (como el cambio de mes) no gana muestra al agruparse: es lo correcto.
+- La regla superviviente se registra una vez («todos los valores»), ocupa un solo hueco de reglas
+  vivas y acumula su evidencia forward con las operaciones de todos.
+
+En 1h y 4h se sigue probando símbolo a símbolo. Pendiente: un universo con valores deslistados
+para evitar el sesgo de supervivencia (R12.11).
 
 ## 6. Auditoría de todas las familias del sistema
 

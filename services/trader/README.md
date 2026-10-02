@@ -69,6 +69,8 @@ uv run python -m services.trader simulate --learn --headless  # el bucle complet
   Monte Carlo y **un único FDR global** para todas. Las supervivientes pasan una comprobación
   *golden* en el motor real. Por qué está cada regla (y por qué no está el patrón de las salidas
   a bolsa): [`docs/estudio-reglas.md`](../../docs/estudio-reglas.md).
+- **Diario agrupado**: en barras diarias cada regla se prueba sobre todos los valores a la vez
+  (una observación por fecha); si sobrevive, opera como una sola regla «todos (agrupada)».
 - **Swing**: las reglas de ≥ 1 h mantienen la posición entre sesiones (en acciones no son
   *day trades*); las intradía siguen cerrando antes del cierre.
 - **Analista IA** (opcional, `OPENAI_API_KEY` en `.env`): antes de cada ciclo lee lo que el lab ha
