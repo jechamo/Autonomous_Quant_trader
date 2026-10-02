@@ -10,19 +10,24 @@ with the cross-sectional features of ``aqt.features.cross_section``:
 * trend following — moving-average trend with an ATR stop;
 * breakout on volume — a 20-bar high confirmed by unusual volume;
 * breadth dip — buy an oversold leader during a market-wide sell-off;
-* short-term reversal on a single symbol — N lower closes in a row, RSI(2) or a close at the
-  bottom of the bar's range (IBS), always inside a long-term uptrend (Jegadeesh 1990; Lehmann
-  1990; Connors & Alvarez 2009; Pagonidis 2013);
+* practitioner heuristics, NOT academic findings, measured with low expectations: N lower
+  closes in a row and RSI(2) oversold inside an uptrend (Connors & Alvarez 2009);
+* close at the bottom of the day's range (IBS) — daily only, documented on index ETFs
+  (Pagonidis 2014);
 * classic candlestick reversals (engulfing, hammer) with context — measured on purpose even if
-  the evidence after costs is weak (Marshall, Young & Rose 2006);
-* 52-week-high anchoring — daily only (George & Hwang 2004);
+  the evidence after costs is negative (Marshall, Young & Rose 2006; Horton 2009);
+* 52-week-high anchoring — daily only; the paper holds 6-12 months (George & Hwang 2004);
 * turn of the month — daily US stocks only (Ariel 1987; Lakonishok & Smidt 1988);
-* news (US stocks with a news source): big moves *with* abnormal news drift, big drops *without*
-  news revert (Chan 2003); earnings headline + gap up + volume drifts (Bernard & Thomas 1989).
+* news (US stocks with a news source): extreme moves *without* news revert (Chan 2003, monthly
+  horizon); moves *with* news drift, mostly after bad news (so the long-only version is weak);
+  earnings headline + gap up + volume drifts (Bernard & Thomas 1989).
+
+``docs/estudio-reglas.md`` grades every family, including the older ones above, by how much of
+it a published study actually supports.
 
 Holding periods are long enough for costs to be a small fraction of the expected move, which is
-precisely where the minute-scale catalog failed. Why each rule is here, and which were left out
-(IPO patterns among them), is argued in ``docs/estudio-reglas.md``.
+precisely where the minute-scale catalog failed. Which rules were left out (IPO patterns among
+them) and why is argued in the same document.
 """
 
 from __future__ import annotations
@@ -241,9 +246,9 @@ SWING_CATALOG: dict[str, tuple[StrategySpec, Grid]] = {
                 ]
             ),
             exit=_exit(signal=Rule(all_of=[C(left="dist_high_252", op="<", right=-0.1)])),
-            params={"near": -0.03, "stop": 3.0, "hold": 40},
+            params={"near": -0.03, "stop": 3.0, "hold": 126},
         ),
-        {"near": [-0.02, -0.05], "hold": [20, 60]},
+        {"near": [-0.02, -0.05], "hold": [60, 126]},  # the paper holds 6-12 months
     ),
     "turn_of_month": (
         StrategySpec(
@@ -320,7 +325,7 @@ SWING_CATALOG: dict[str, tuple[StrategySpec, Grid]] = {
 
 # Effects documented on daily bars only, calendar effects documented on US equities only, and
 # rules that need the news_* features (``aqt.news``).
-DAILY_ONLY = frozenset({"near_52w_high", "turn_of_month"})
+DAILY_ONLY = frozenset({"near_52w_high", "turn_of_month", "ibs_reversion"})
 EQUITY_ONLY = frozenset({"turn_of_month"})
 NEWS_FAMILIES = frozenset({"news_drift", "quiet_drop_reversal", "earnings_gap_drift"})
 

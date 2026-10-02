@@ -105,8 +105,9 @@ Petición del usuario (2026-10-02): ¿estudia el sistema reglas como «tres baja
 rebota» o el patrón de las salidas a bolsa? Respuesta: estudio de reglas con evidencia publicada
 ([`estudio-reglas.md`](estudio-reglas.md)) y noticias reales como punto de entrada diario.
 
-- ✅ Estudio: qué reglas probar (A), cuáles cuando haya noticias (B), cuáles medir con
-  expectativa baja (C) y cuáles no (D, incluido el patrón de IPO), con referencias.
+- ✅ Estudio: qué reglas probar y con qué respaldo real (A: como en el estudio; B: fuera de sus
+  condiciones; C: sin respaldo académico o con evidencia negativa; D: descartadas, incluido el
+  patrón de IPO). Auditoría de fuentes de todas las familias del sistema.
 - ✅ Features nuevas sin look-ahead: rachas de cierres (`down_streak`, `up_streak`), `rsi_2`,
   `dist_high_252`, día del mes y días a fin de mes.
 - ✅ Familias nuevas en el lab: `streak_reversion`, `rsi2_reversion`, `ibs_reversion`,

@@ -101,8 +101,9 @@ def test_catalog_for_keeps_daily_and_equity_effects_where_documented() -> None:
     stocks = LabConfig(symbols=("A",), timeframes=("15min", "1h", "1d"), session="us_equity")
     hourly_families = stocks.catalog_for("1h")[1]
     assert "near_52w_high" not in hourly_families and "turn_of_month" not in hourly_families
-    assert {"streak_reversion", "rsi2_reversion", "ibs_reversion"} <= set(hourly_families)
-    assert {"near_52w_high", "turn_of_month"} <= set(stocks.catalog_for("1d")[1])
+    assert {"streak_reversion", "rsi2_reversion"} <= set(hourly_families)
+    assert "ibs_reversion" not in hourly_families  # documented on daily bars only
+    assert {"near_52w_high", "turn_of_month", "ibs_reversion"} <= set(stocks.catalog_for("1d")[1])
     crypto = LabConfig(symbols=("A",), session="24/7")
     daily_crypto = crypto.catalog_for("1d")[1]
     assert "turn_of_month" not in daily_crypto and "near_52w_high" in daily_crypto
