@@ -35,7 +35,7 @@ from aqt.lab.registry import RuleRecord, RuleRegistry, RuleStatus
 from aqt.research.study import StudyConfig, apply_global_fdr, run_study
 from aqt.strategies.dsl import StrategySpec
 from aqt.strategies.intraday import INTRADAY_CATALOG
-from aqt.strategies.swing import SWING_CATALOG
+from aqt.strategies.swing import SWING_CATALOG, swing_families_for
 from aqt.stream.dsl_strategy import DslStreamStrategy, ResearchBarBook, rule_id_for
 from aqt.stream.engine import EngineConfig, StreamingEngine
 from aqt.stream.events import Event
@@ -58,6 +58,7 @@ class LabConfig:
     timeframe: str = "1min"
     timeframes: tuple[str, ...] = ()  # several timeframes in one cycle (default: ``timeframe``)
     intraday_days: float = 7.0  # 1-minute research uses at most this much (1-second klines)
+    daily_days: float = 1825.0  # daily bars need years: 252-bar warm-up + enough trades per symbol
     fee_pct: float = 0.001
     spread_pct: float = 0.0001
     slippage_pct: float = 0.0005
@@ -84,13 +85,18 @@ class LabConfig:
         return self.timeframes or (self.timeframe,)
 
     def catalog_for(self, timeframe: str) -> tuple[str, tuple[str, ...]]:
-        """Swing catalog from one hour up (holds overnight), intraday catalog below."""
-        if _TIMEFRAMES[timeframe] >= 3600:
-            return "swing", self.swing_families
+        """Swing catalog from one hour up (holds overnight), intraday catalog below. Daily-only
+        and equity-only swing families are left out where they were never documented."""
+        tf_s = _TIMEFRAMES[timeframe]
+        if tf_s >= 3600:
+            return "swing", swing_families_for(self.swing_families, tf_s, self.session)
         return "intraday", self.families
 
     def days_for(self, timeframe: str) -> float:
-        """Crypto 1-minute research is built from 1-second klines: cap how much is downloaded."""
+        """Crypto 1-minute research is built from 1-second klines: cap how much is downloaded.
+        Daily bars get ``daily_days`` of history."""
+        if _TIMEFRAMES[timeframe] >= 86_400:
+            return self.daily_days
         crypto_minute = timeframe == "1min" and self.session == "24/7"
         return min(self.days, self.intraday_days) if crypto_minute else self.days
 

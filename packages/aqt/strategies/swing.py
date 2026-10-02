@@ -9,22 +9,35 @@ with the cross-sectional features of ``aqt.features.cross_section``:
 * relative strength with market breadth — leaders when most of the market is rising;
 * trend following — moving-average trend with an ATR stop;
 * breakout on volume — a 20-bar high confirmed by unusual volume;
-* breadth dip — buy an oversold leader during a market-wide sell-off.
+* breadth dip — buy an oversold leader during a market-wide sell-off;
+* short-term reversal on a single symbol — N lower closes in a row, RSI(2) or a close at the
+  bottom of the bar's range (IBS), always inside a long-term uptrend (Jegadeesh 1990; Lehmann
+  1990; Connors & Alvarez 2009; Pagonidis 2013);
+* classic candlestick reversals (engulfing, hammer) with context — measured on purpose even if
+  the evidence after costs is weak (Marshall, Young & Rose 2006);
+* 52-week-high anchoring — daily only (George & Hwang 2004);
+* turn of the month — daily US stocks only (Ariel 1987; Lakonishok & Smidt 1988).
 
 Holding periods are long enough for costs to be a small fraction of the expected move, which is
-precisely where the minute-scale catalog failed.
+precisely where the minute-scale catalog failed. Why each rule is here, and which were left out
+(IPO patterns among them), is argued in ``docs/estudio-reglas.md``.
 """
 
 from __future__ import annotations
 
-from aqt.strategies.dsl import Condition, ExitRules, Rule, StrategySpec
+from collections.abc import Iterable
+
+from aqt.strategies.dsl import Condition, ExitRules, Rule, Scalar, StrategySpec
 
 C = Condition
 Grid = dict[str, list[float | int]]
 
 
 def _exit(
-    stop: str = "$stop", hold: str = "$hold", signal: Rule | None = None, target: str | None = None
+    stop: Scalar = "$stop",
+    hold: Scalar = "$hold",
+    signal: Rule | None = None,
+    target: Scalar | None = None,
 ) -> ExitRules:
     return ExitRules(
         stop_atr_mult=stop, target_atr_mult=target, max_holding_bars=hold, exit_signal=signal
@@ -146,7 +159,127 @@ SWING_CATALOG: dict[str, tuple[StrategySpec, Grid]] = {
         ),
         {"breadth": [0.3, 0.4], "stop": [2.5, 4.0], "hold": [10, 40]},
     ),
+    "streak_reversion": (
+        StrategySpec(
+            name="streak_reversion",
+            family="short_term_reversal",
+            description="N lower closes in a row inside a long-term uptrend; out on RSI(2) > 70.",
+            entry=Rule(
+                all_of=[
+                    C(left="down_streak", op=">=", right="$n"),
+                    C(left="close", op=">", right="sma_200"),
+                ]
+            ),
+            exit=_exit(signal=Rule(all_of=[C(left="rsi_2", op=">", right=70)])),
+            params={"n": 3, "stop": 2.5, "hold": 5},
+        ),
+        {"n": [2, 3, 4], "hold": [3, 6]},
+    ),
+    "rsi2_reversion": (
+        StrategySpec(
+            name="rsi2_reversion",
+            family="short_term_reversal",
+            description="RSI(2) deeply oversold above the 200-bar SMA; out on RSI(2) > 70.",
+            entry=Rule(
+                all_of=[
+                    C(left="rsi_2", op="<", right="$th"),
+                    C(left="close", op=">", right="sma_200"),
+                ]
+            ),
+            exit=_exit(signal=Rule(all_of=[C(left="rsi_2", op=">", right=70)])),
+            params={"th": 10, "stop": 2.5, "hold": 5},
+        ),
+        {"th": [5, 10, 15]},
+    ),
+    "ibs_reversion": (
+        StrategySpec(
+            name="ibs_reversion",
+            family="short_term_reversal",
+            description="Close at the bottom of the bar's range (low IBS) in a long-term uptrend.",
+            entry=Rule(
+                all_of=[
+                    C(left="close_position", op="<", right="$ibs"),
+                    C(left="close", op=">", right="sma_200"),
+                ]
+            ),
+            exit=_exit(signal=Rule(all_of=[C(left="close_position", op=">", right=0.7)])),
+            params={"ibs": 0.2, "stop": 2.5, "hold": 3},
+        ),
+        {"ibs": [0.1, 0.2], "hold": [1, 3]},
+    ),
+    "candle_reversal": (
+        StrategySpec(
+            name="candle_reversal",
+            family="candlestick_patterns",
+            description="Bullish engulfing or hammer, oversold, above the 200-bar EMA.",
+            entry=Rule(
+                all_of=[
+                    C(left="rsi", op="<", right="$rsi"),
+                    C(left="close", op=">", right="ema_200"),
+                ],
+                any_of=[
+                    C(left="pat_bullish_engulfing", op="==", right=1),
+                    C(left="pat_hammer", op="==", right=1),
+                ],
+            ),
+            exit=_exit(stop=2.0, hold=10, target=3.0),
+            params={"rsi": 40},
+        ),
+        {"rsi": [35, 45]},
+    ),
+    "near_52w_high": (
+        StrategySpec(
+            name="near_52w_high",
+            family="anchoring_52w_high",
+            description="Within a few % of the 52-week high in an uptrend; out 10 % below it.",
+            entry=Rule(
+                all_of=[
+                    C(left="dist_high_252", op=">", right="$near"),
+                    C(left="close", op=">", right="sma_200"),
+                ]
+            ),
+            exit=_exit(signal=Rule(all_of=[C(left="dist_high_252", op="<", right=-0.1)])),
+            params={"near": -0.03, "stop": 3.0, "hold": 40},
+        ),
+        {"near": [-0.02, -0.05], "hold": [20, 60]},
+    ),
+    "turn_of_month": (
+        StrategySpec(
+            name="turn_of_month",
+            family="calendar",
+            description="Long over the turn of the month: last days of a month to its 3rd day.",
+            entry=Rule(all_of=[C(left="days_to_month_end", op="<=", right="$pre")]),
+            exit=_exit(
+                stop=3.0,
+                hold=8,
+                signal=Rule(
+                    all_of=[
+                        C(left="day_of_month", op=">=", right=3),
+                        C(left="day_of_month", op="<=", right=20),
+                    ]
+                ),
+            ),
+            params={"pre": 2},
+        ),
+        {"pre": [2, 4]},
+    ),
 }
+
+# Effects documented on daily bars only, and calendar effects documented on US equities only.
+DAILY_ONLY = frozenset({"near_52w_high", "turn_of_month"})
+EQUITY_ONLY = frozenset({"turn_of_month"})
+
+
+def swing_families_for(
+    families: Iterable[str], timeframe_s: float, session: str
+) -> tuple[str, ...]:
+    """The families worth testing at this timeframe and session (fewer, better hypotheses)."""
+    return tuple(
+        f
+        for f in families
+        if not (f in DAILY_ONLY and timeframe_s < 86_400)
+        and not (f in EQUITY_ONLY and session != "us_equity")
+    )
 
 
 def list_swing() -> list[str]:

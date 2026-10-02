@@ -58,10 +58,12 @@ class Market:
 
 MARKETS = {
     "binance": Market(
-        "binance", "24/7", 0.001, 1.0, 0.0005, DEFAULT_DB, False, ("1min", "1h", "4h")
+        "binance", "24/7", 0.001, 1.0, 0.0005, DEFAULT_DB, False, ("1min", "1h", "4h", "1d")
     ),
     # Alpaca: no commission; ~0.002 % covers SEC/FINRA sell fees. IEX spreads are conservative.
-    "stocks": Market("stocks", "us_equity", 0.00002, 2.0, 0.0003, STOCKS_DB, True, ("15min", "1h")),
+    "stocks": Market(
+        "stocks", "us_equity", 0.00002, 2.0, 0.0003, STOCKS_DB, True, ("15min", "1h", "1d")
+    ),
 }
 
 
@@ -78,11 +80,13 @@ def _history(m: Market, sym: str, start_ms: int, end_ms: int, timeframe: str) ->
 
 
 def _warmup_ms(m: Market, timeframe: str, bars: int = 300) -> int:
-    """Enough calendar time for ``bars`` bars (stocks only trade ~6.5 h a day, 5 days a week)."""
+    """Enough calendar time for ``bars`` bars (stocks only trade ~6.5 h a day, 5 days a week:
+    one daily bar per trading day)."""
     from aqt.stream.history import TIMEFRAME_SECONDS
 
-    scale = 5.2 if m.name == "stocks" else 1.0
-    return int(TIMEFRAME_SECONDS[timeframe] * bars * scale * 1000)
+    tf_s = TIMEFRAME_SECONDS[timeframe]
+    scale = (1.5 if tf_s >= 86_400 else 5.2) if m.name == "stocks" else 1.0
+    return int(tf_s * bars * scale * 1000)
 
 
 def _market(name: str) -> Market:

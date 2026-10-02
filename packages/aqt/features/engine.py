@@ -23,6 +23,7 @@ from aqt.indicators import (
     rolling_volatility,
     rsi,
     sma,
+    streaks,
     trend_strength,
     volume_ratio,
     vwap_deviation,
@@ -81,6 +82,7 @@ class FeatureEngine:
         feats["atr"] = atr(df, self.atr_window)
         feats["atr_pct"] = feats["atr"] / close
         feats["rsi"] = rsi(close, self.rsi_window)
+        feats["rsi_2"] = rsi(close, 2)  # Connors' short-term oversold gauge
         for w in self.ma_windows:
             feats[f"sma_{w}"] = sma(close, w)
             feats[f"ema_{w}"] = ema(close, w)
@@ -100,6 +102,8 @@ class FeatureEngine:
         feats["low_20"] = df["low"].rolling(20, min_periods=20).min()
         feats["prev_high_20"] = feats["high_20"].shift(1)
         feats["prev_low_20"] = feats["low_20"].shift(1)
+        # Nearness to the 52-week (252-bar) high: George & Hwang's anchoring measure.
+        feats["dist_high_252"] = distance_to(close, df["high"].rolling(252, min_periods=252).max())
         if "taker_buy_volume" in df.columns:
             # Signed order flow (intraday data): share of volume bought by aggressive takers,
             # mapped to [-1, 1] over the last n bars. Only uses bars up to and including t.
@@ -116,6 +120,7 @@ class FeatureEngine:
                 df[["open", "high", "low", "close", "volume", *extra]],
                 pd.DataFrame(feats, index=df.index),
                 macd(close),
+                streaks(close),
                 candle_geometry(df),
                 candlestick_patterns(df),
                 self.regime.classify(df),

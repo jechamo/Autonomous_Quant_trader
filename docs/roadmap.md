@@ -99,6 +99,24 @@ de pruebas fallaban por muestra insuficiente. Se amplía dónde buscar, sin rela
 - ⏳ Familias de pares, correlación y beta contra benchmark; sincronizar `hypotheses` con la
   tabla `ai_hypotheses` de Supabase.
 
+## Bloque 5 (en curso): reglas documentadas + noticias del día
+
+Petición del usuario (2026-10-02): ¿estudia el sistema reglas como «tres bajadas seguidas y
+rebota» o el patrón de las salidas a bolsa? Respuesta: estudio de reglas con evidencia publicada
+([`estudio-reglas.md`](estudio-reglas.md)) y noticias reales como punto de entrada diario.
+
+- ✅ Estudio: qué reglas probar (A), cuáles cuando haya noticias (B), cuáles medir con
+  expectativa baja (C) y cuáles no (D, incluido el patrón de IPO), con referencias.
+- ✅ Features nuevas sin look-ahead: rachas de cierres (`down_streak`, `up_streak`), `rsi_2`,
+  `dist_high_252`, día del mes y días a fin de mes.
+- ✅ Familias nuevas en el lab: `streak_reversion`, `rsi2_reversion`, `ibs_reversion`,
+  `candle_reversal` (1h/4h/1d), `near_52w_high` (1d) y `turn_of_month` (1d, acciones).
+- ✅ Barras diarias en el lab con 5 años de historia (cripto y acciones).
+- ⏳ Noticias reales (Alpaca News) como features deterministas y familias de Chan (2003) y PEAD.
+- ⏳ «Noticias del día»: el Analista IA resume los titulares reales del día (con la fecha) y
+  propone hipótesis; nunca opera.
+- ⏳ Prueba agrupada (panel) entre símbolos para las reglas diarias.
+
 ## Próximos pasos técnicos sugeridos
 
 - Persistir resultados del pipeline en Supabase (`experiments`, `backtests`, `walk_forward_runs`).

@@ -7,16 +7,16 @@ existen y que el resumen cuadra con las filas.
 
 **Leyenda:** ✅ hecho · 🟡 parcial · ⏳ pendiente · 🚫 excluido por diseño (y forzado en código)
 
-**Última actualización:** 2026-10-02 · Panel visual de aprendizaje y menú de arranque
+**Última actualización:** 2026-10-02 · Estudio de reglas documentadas y familias nuevas en el lab
 
 <!-- summary:start -->
 | Estado | Requisitos |
 |---|---|
-| ✅ | 193 |
+| ✅ | 204 |
 | 🟡 | 32 |
 | ⏳ | 38 |
 | 🚫 | 7 |
-| **Total** | **270** |
+| **Total** | **281** |
 
 | Sección | ✅ | 🟡 | ⏳ | 🚫 | Total |
 |---|---|---|---|---|---|
@@ -29,9 +29,9 @@ existen y que el resumen cuadra con las filas.
 | §7 | 12 | 0 | 0 | 0 | 12 |
 | §8 | 3 | 0 | 0 | 0 | 3 |
 | §9 | 7 | 3 | 4 | 0 | 14 |
-| §10 | 13 | 0 | 6 | 7 | 26 |
-| §11 | 23 | 1 | 3 | 0 | 27 |
-| §12 | 24 | 4 | 1 | 0 | 29 |
+| §10 | 20 | 0 | 6 | 7 | 33 |
+| §11 | 26 | 1 | 3 | 0 | 30 |
+| §12 | 25 | 4 | 1 | 0 | 30 |
 | §13 | 6 | 0 | 0 | 0 | 6 |
 | §14 | 5 | 0 | 1 | 0 | 6 |
 | §15 | 0 | 2 | 2 | 0 | 4 |
@@ -146,7 +146,7 @@ existen y que el resumen cuadra con las filas.
 
 | ID | Requisito | Estado | Implementación | Tests | Falta / notas |
 |---|---|---|---|---|---|
-| R10.01 | Candlestick patterns | ✅ | `packages/aqt/strategies/catalog.py::CATALOG` | `tests/test_dsl.py::test_catalog_renders_on_features` | Familia `candlestick` |
+| R10.01 | Candlestick patterns | ✅ | `packages/aqt/strategies/catalog.py::CATALOG` | `tests/test_dsl.py::test_catalog_renders_on_features` | Familia `candlestick` en el research manual; el lab automático prueba `candle_reversal` (R10.31) |
 | R10.02 | Trend following | ✅ | `packages/aqt/strategies/catalog.py::CATALOG` | `tests/test_dsl.py::test_catalog_renders_on_features` | — |
 | R10.03 | Momentum | ✅ | `packages/aqt/strategies/catalog.py::CATALOG` | `tests/test_dsl.py::test_catalog_renders_on_features` | — |
 | R10.04 | Mean reversion | ✅ | `packages/aqt/strategies/catalog.py::CATALOG` | `tests/test_dsl.py::test_catalog_renders_on_features` | — |
@@ -172,6 +172,13 @@ existen y que el resumen cuadra con las filas.
 | R10.24 | Catálogo intradía para el Research Lab (7 familias, cientos de variantes) | ✅ | `packages/aqt/strategies/intraday.py::INTRADAY_CATALOG` | `tests/test_dsl_stream.py::test_every_intraday_rule_renders_on_research_features` | Mismo DSL que el research diario; objetivos amplios para que la búsqueda encuentre horizontes que paguen comisiones |
 | R10.25 | Catálogo swing (≥ 1 h) con familias de base académica | ✅ | `packages/aqt/strategies/swing.py::SWING_CATALOG` | `tests/test_swing.py::test_swing_catalog_renders_on_augmented_features` | 7 familias (~72 variantes): momentum y reversión entre valores, fuerza relativa, tendencia, ruptura con volumen, amplitud |
 | R10.26 | Hipótesis del Analista IA como familia examinada por el lab | ✅ | `packages/aqt/lab/cycle.py::run_research_cycle` | `tests/test_analyst.py::test_cycle_tests_pending_ai_hypotheses_in_the_global_fdr` | Familia `ai_*`; mismas pruebas (OOS, walk-forward, Monte Carlo, golden check) y el mismo FDR |
+| R10.27 | Estudio de reglas documentadas: qué probar, qué no y por qué | ✅ | `docs/estudio-reglas.md` | — | Petición del usuario (2026-10-02). Niveles A (al lab), B (con noticias), C (se mide con expectativa baja) y D (descartada: IPO, pre-FOMC, deriva nocturna, sentimiento LLM en backtest) con referencias |
+| R10.28 | Reversión tras N cierres a la baja seguidos | ✅ | `packages/aqt/strategies/swing.py::SWING_CATALOG` | `tests/test_swing.py::test_documented_rules_fire_on_their_textbook_setups`, `tests/test_swing.py::test_swing_catalog_renders_on_augmented_features` | Familia `streak_reversion` (1h/4h/1d): `down_streak ≥ n` sobre SMA200, sale con RSI(2) > 70. Jegadeesh 1990; Lehmann 1990; Connors y Alvarez 2009 |
+| R10.29 | Reversión RSI(2) | ✅ | `packages/aqt/strategies/swing.py::SWING_CATALOG` | `tests/test_swing.py::test_documented_rules_fire_on_their_textbook_setups`, `tests/test_swing.py::test_swing_catalog_renders_on_augmented_features` | Familia `rsi2_reversion` (1h/4h/1d) |
+| R10.30 | Reversión IBS (cierre en mínimos del rango) | ✅ | `packages/aqt/strategies/swing.py::SWING_CATALOG` | `tests/test_swing.py::test_documented_rules_fire_on_their_textbook_setups`, `tests/test_swing.py::test_swing_catalog_renders_on_augmented_features` | Familia `ibs_reversion` (1h/4h/1d) sobre `close_position`. Pagonidis 2013 |
+| R10.31 | Patrones de velas con contexto en el lab automático | ✅ | `packages/aqt/strategies/swing.py::SWING_CATALOG` | `tests/test_swing.py::test_swing_catalog_renders_on_augmented_features` | Familia `candle_reversal` (envolvente o martillo + RSI bajo + EMA200); evidencia débil tras costes, se mide igualmente (nivel C) |
+| R10.32 | Cerca del máximo de 52 semanas | ✅ | `packages/aqt/strategies/swing.py::SWING_CATALOG`, `packages/aqt/strategies/swing.py::swing_families_for` | `tests/test_swing.py::test_documented_rules_fire_on_their_textbook_setups`, `tests/test_swing.py::test_swing_catalog_renders_on_augmented_features`, `tests/test_swing.py::test_catalog_for_keeps_daily_and_equity_effects_where_documented` | Familia `near_52w_high`, sólo en 1d. George y Hwang 2004 |
+| R10.33 | Efecto cambio de mes | ✅ | `packages/aqt/strategies/swing.py::SWING_CATALOG`, `packages/aqt/strategies/swing.py::swing_families_for` | `tests/test_swing.py::test_documented_rules_fire_on_their_textbook_setups`, `tests/test_swing.py::test_swing_catalog_renders_on_augmented_features`, `tests/test_swing.py::test_catalog_for_keeps_daily_and_equity_effects_where_documented` | Familia `turn_of_month`, sólo 1d y acciones; días naturales (festivos pendientes). Ariel 1987; Lakonishok y Smidt 1988 |
 
 ## §11 Feature Engine
 
@@ -204,6 +211,9 @@ existen y que el resumen cuadra con las filas.
 | R11.25 | Desequilibrio de flujo de órdenes (taker buy) como feature | ✅ | `packages/aqt/features/engine.py::FeatureEngine` | `tests/test_dsl_stream.py::test_flow_features_are_causal` | `flow_imbalance_5/15` cuando hay `taker_buy_volume` (Binance) |
 | R11.26 | Flujo estimado para acciones (Bulk Volume Classification) | ✅ | `packages/aqt/stream/stocks.py::bvc_taker_buy` | `tests/test_stocks.py::test_bvc_flow_estimate` | Misma estimación en research y en vivo (`ResearchBarBook(bvc=True)`) |
 | R11.27 | Features de calendario (hora, día, minutos al cierre) | ✅ | `packages/aqt/features/cross_section.py::calendar_features` | `tests/test_swing.py::test_calendar_features_and_passthrough` | `minutes_to_close` sólo en acciones (sesión de NY) |
+| R11.28 | Rachas de cierres a la baja / al alza | ✅ | `packages/aqt/indicators/core.py::streaks`, `packages/aqt/features/engine.py::FeatureEngine` | `tests/test_indicators.py::test_streaks_count_consecutive_lower_and_higher_closes`, `tests/test_indicators.py::test_features_have_no_look_ahead` | `down_streak`, `up_streak`; un cierre igual reinicia la racha |
+| R11.29 | RSI(2) y distancia al máximo de 252 barras | ✅ | `packages/aqt/features/engine.py::FeatureEngine` | `tests/test_indicators.py::test_short_term_and_52_week_features` | `rsi_2`, `dist_high_252` (≤ 0) |
+| R11.30 | Calendario mensual (día del mes, días a fin de mes) | ✅ | `packages/aqt/features/cross_section.py::calendar_features` | `tests/test_swing.py::test_month_calendar_uses_each_bars_own_trading_day` | `day_of_month`, `days_to_month_end`; fecha del último instante de la vela (NY en acciones), lo que corrige `day_of_week` en barras diarias de acciones |
 
 ## §12 Statistical Engine
 
@@ -234,10 +244,11 @@ existen y que el resumen cuadra con las filas.
 | R12.23 | Comprobación golden: la regla validada debe ganar también en el motor real | ✅ | `packages/aqt/lab/cycle.py::golden_check` | `tests/test_lab.py::test_cycle_discovers_planted_edge_and_ignores_noise` | Replay del periodo fuera de muestra con latencia, bid/ask y comisiones |
 | R12.24 | Research masivo en paralelo | ✅ | `packages/aqt/research/study.py::run_study` | `tests/test_lab.py::test_cycle_discovers_planted_edge_and_ignores_noise` | `workers` procesos; FDR global idéntico al secuencial. Real: 1.790 hipótesis (10 símbolos × 7 días) en ~7 min |
 | R12.25 | Meta-labeling validado sin fugas | ✅ | `packages/aqt/lab/meta.py::train_meta_filter` | `tests/test_meta.py::test_meta_filter_refuses_noise_and_small_samples` | Purged K-fold, Bonferroni sobre umbrales; excluye niveles de precio y reloj |
-| R12.26 | Research multi-timeframe con un único FDR global | ✅ | `packages/aqt/research/study.py::apply_global_fdr`, `packages/aqt/lab/cycle.py::run_research_cycle` | `tests/test_swing.py::test_multi_timeframe_cycle_finds_a_cross_sectional_leader` | Cripto 1min/1h/4h, acciones 15min/1h; todas las hipótesis de todos los timeframes cuentan en el mismo BH |
+| R12.26 | Research multi-timeframe con un único FDR global | ✅ | `packages/aqt/research/study.py::apply_global_fdr`, `packages/aqt/lab/cycle.py::run_research_cycle` | `tests/test_swing.py::test_multi_timeframe_cycle_finds_a_cross_sectional_leader` | Cripto 1min/1h/4h/1d, acciones 15min/1h/1d; todas las hipótesis de todos los timeframes cuentan en el mismo BH |
 | R12.27 | Swing: reglas ≥ 1 h mantienen posiciones entre sesiones | ✅ | `packages/aqt/stream/engine.py::StreamingEngine`, `packages/aqt/stream/dsl_strategy.py::DslStreamStrategy` | `tests/test_swing.py::test_swing_positions_survive_the_close_intraday_ones_do_not` | Las intradía se cierran antes del cierre; las swing no, y sólo entran con mercado abierto |
 | R12.28 | Paridad research ↔ vivo de las features entre valores | ✅ | `packages/aqt/stream/dsl_strategy.py::ResearchBarBook` | `tests/test_swing.py::test_live_cross_sectional_rule_matches_research` | El libro reconstruye el panel con todas las series del timeframe; mismas entradas que el research |
 | R12.29 | Progreso del aprendizaje visible (embudo de hipótesis, reglas hacia champion, ML, IA, actividad) | ✅ | `packages/aqt/lab/progress.py::learning_progress`, `apps/dashboard/local/app.js` | `tests/test_progress.py::test_funnel_accumulates_every_cycle_and_rule_transitions`, `tests/test_progress.py::test_ml_progress_counts_examples_against_what_the_trainer_needs`, `tests/test_progress.py::test_rule_progress_and_learning_api` | Panel «Aprendizaje»: circuito cuyos nodos se iluminan y reciben chispas con cada novedad, y bolas que se llenan (reglas, machine learning, camino a real); detalle solo al pasar el ratón. `GET /api/learning` |
+| R12.30 | Barras diarias en el lab con historia larga y familias sólo donde están documentadas | ✅ | `packages/aqt/lab/cycle.py::LabConfig`, `services/trader/cli.py::MARKETS` | `tests/test_swing.py::test_catalog_for_keeps_daily_and_equity_effects_where_documented` | `daily_days` = 5 años para 1d (warm-up de 252 barras + muestra); efectos diarios fuera de 1h/4h y de calendario de acciones fuera de cripto. Riesgo: muestra por símbolo pequeña; falta prueba agrupada entre símbolos |
 
 ## §13 Bayesian Evidence Engine
 

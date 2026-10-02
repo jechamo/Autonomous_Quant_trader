@@ -55,15 +55,18 @@ Binance WS (bookTicker + aggTrade) ─► velas de N s ─► features increment
 ```bash
 uv run python -m services.trader research                     # un ciclo ahora (top-10 USDC, 365 días)
 uv run python -m services.trader research --timeframes 1h,4h  # sólo swing
+uv run python -m services.trader research --timeframes 1d     # sólo diario (5 años de historia)
 uv run python -m services.trader analyst --dry-run            # qué leería el Analista IA
 uv run python -m services.trader simulate --learn --headless  # el bucle completo sobre 72 h reales
 ```
 
 - Cada 6 h (proceso aparte, el trading no se detiene) prueba miles de variantes a varias escalas:
-  intradía (7 familias sobre los últimos 7 días de velas de 1 s) y swing de 1 h / 4 h (7 familias
-  entre valores, tendencia y ruptura sobre 365 días), con validación fuera de muestra,
-  walk-forward, Monte Carlo y **un único FDR global** para todas. Las supervivientes pasan una
-  comprobación *golden* en el motor real.
+  intradía (7 familias sobre los últimos 7 días de velas de 1 s), swing de 1 h / 4 h (entre
+  valores, tendencia, ruptura y reversión a corto plazo sobre 365 días) y diario (además máximo
+  de 52 semanas y cambio de mes, sobre 5 años), con validación fuera de muestra, walk-forward,
+  Monte Carlo y **un único FDR global** para todas. Las supervivientes pasan una comprobación
+  *golden* en el motor real. Por qué está cada regla (y por qué no está el patrón de las salidas
+  a bolsa): [`docs/estudio-reglas.md`](../../docs/estudio-reglas.md).
 - **Swing**: las reglas de ≥ 1 h mantienen la posición entre sesiones (en acciones no son
   *day trades*); las intradía siguen cerrando antes del cierre.
 - **Analista IA** (opcional, `OPENAI_API_KEY` en `.env`): antes de cada ciclo lee lo que el lab ha
@@ -82,7 +85,7 @@ uv run python -m services.trader simulate --learn --headless  # el bucle complet
 
 - `simulate` y `research` funcionan sin cuenta con datos de Yahoo (~7 días de velas de 1 min).
 - `run` necesita claves **paper** gratuitas de Alpaca en `.env` (`ALPACA_API_KEY_ID`,
-  `ALPACA_API_SECRET_KEY`): dan streaming IEX y años de historia para el lab (15 min y 1 h).
+  `ALPACA_API_SECRET_KEY`): dan streaming IEX y años de historia para el lab (15 min, 1 h y 1 d).
 - Reglas intradía: sin entradas en los últimos 15 min y todo cerrado 5 min antes de las 16:00 NY.
   Reglas swing (≥ 1 h): sólo entran con mercado abierto y pueden mantener la posición de un día
   para otro.

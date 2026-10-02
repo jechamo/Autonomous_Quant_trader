@@ -13,8 +13,12 @@ They are taken from the **previous completed panel bar**: live, a symbol's bar m
 seconds before another's, so using bar ``t`` would make the value depend on arrival order. One bar
 of lag makes research and live see exactly the same number, and keeps everything causal.
 
-Calendar features (from the bar timestamp only): ``hour_utc``, ``day_of_week`` and, for US
-stocks, ``minutes_to_close`` measured from the end of the bar to the 16:00 New York close.
+Calendar features (from the bar timestamp only): ``hour_utc``, ``day_of_week``,
+``day_of_month``, ``days_to_month_end`` (calendar days left in the month, for turn-of-the-month
+effects) and, for US stocks, ``minutes_to_close`` measured from the end of the bar to the 16:00
+New York close. Dates are those of the bar's last instant (New York for stocks, UTC otherwise), so
+a daily bar labelled 00:00 UTC belongs to its own trading day. The calendar is known in advance:
+none of these looks ahead.
 """
 
 from __future__ import annotations
@@ -34,7 +38,13 @@ XS_COLUMNS = (
     "xs_breadth",
     "xs_n",
 )
-CALENDAR_COLUMNS = ("hour_utc", "day_of_week", "minutes_to_close")
+CALENDAR_COLUMNS = (
+    "hour_utc",
+    "day_of_week",
+    "minutes_to_close",
+    "day_of_month",
+    "days_to_month_end",
+)
 PASSTHROUGH_PREFIXES = ("xs_",)
 
 
@@ -74,14 +84,15 @@ def calendar_features(index: pd.DatetimeIndex, timeframe_s: float, session: str)
     idx = pd.DatetimeIndex(index)
     out = pd.DataFrame(index=idx)
     out["hour_utc"] = idx.hour + idx.minute / 60.0
+    local = idx.tz_convert(NY) if session == "us_equity" else idx
+    last = local + pd.Timedelta(seconds=timeframe_s) - pd.Timedelta(microseconds=1)
+    out["day_of_week"] = last.dayofweek.astype(float)
     if session == "us_equity":
-        local = idx.tz_convert(NY)
-        out["day_of_week"] = local.dayofweek.astype(float)
         bar_end = local + pd.Timedelta(seconds=timeframe_s)
         close = local.normalize() + pd.Timedelta(hours=16)
         out["minutes_to_close"] = np.maximum((close - bar_end).total_seconds() / 60.0, 0.0)
-    else:
-        out["day_of_week"] = idx.dayofweek.astype(float)
+    out["day_of_month"] = last.day.astype(float)
+    out["days_to_month_end"] = (last.days_in_month - last.day).astype(float)
     return out
 
 
