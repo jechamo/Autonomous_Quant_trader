@@ -1,7 +1,14 @@
 import numpy as np
 import pandas as pd
 from aqt.features import FeatureEngine
-from aqt.indicators import atr, bollinger_position, candle_geometry, rsi, trend_strength
+from aqt.indicators import (
+    atr,
+    bollinger_position,
+    candle_geometry,
+    rsi,
+    streaks,
+    trend_strength,
+)
 
 
 def test_rsi_bounds_and_extremes() -> None:
@@ -24,6 +31,23 @@ def test_candle_geometry_ranges(ohlcv: pd.DataFrame) -> None:
         assert g[col].between(-1e-9, 1 + 1e-9).all()
     total = g["upper_shadow"] + g["lower_shadow"] + g["body_range_ratio"]
     assert np.allclose(total, 1.0)
+
+
+def test_streaks_count_consecutive_lower_and_higher_closes() -> None:
+    close = pd.Series([10.0, 9.0, 8.0, 7.0, 7.0, 8.0, 9.0, 8.5])
+    s = streaks(close)
+    assert np.isnan(s["down_streak"].iloc[0]) and np.isnan(s["up_streak"].iloc[0])
+    assert list(s["down_streak"].iloc[1:]) == [1, 2, 3, 0, 0, 0, 1]  # a flat close resets
+    assert list(s["up_streak"].iloc[1:]) == [0, 0, 0, 0, 1, 2, 0]
+
+
+def test_short_term_and_52_week_features(features: pd.DataFrame) -> None:
+    assert features["rsi_2"].dropna().between(0, 100).all()
+    # RSI(2) swings much more than RSI(14): it is the short-term oversold gauge.
+    assert features["rsi_2"].std() > features["rsi"].std()
+    near = features["dist_high_252"]
+    assert near.iloc[:251].isna().all() and (near.dropna() <= 1e-12).all()
+    assert (features["down_streak"].dropna() >= 0).all()
 
 
 def test_bollinger_and_trend(ohlcv: pd.DataFrame) -> None:

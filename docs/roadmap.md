@@ -17,7 +17,7 @@ Detalle requisito por requisito en [`prd-traceability.md`](prd-traceability.md).
 | 11 | AI Analyst (OpenAI) con salida estructurada, sin acceso a órdenes | ✅ local: propone hipótesis en el DSL que el Research Lab examina (bloque 4); sincronización con Supabase ⏳ |
 | 12 | Autonomous Research Loop (Railway cron) | 🟡 bucle completo en local (research cada 6 h, revisión y meta-learning cada hora); Railway ⏳ |
 | 13 | Dashboard | 🟡 dashboard local en localhost ✅; Lovable/Vercel ⏳ |
-| 14 | Deploy (Vercel / Supabase / Railway) | ⏳ (de momento todo corre en local) |
+| 14 | Deploy (Vercel / Supabase / Railway) | ⏳ aparcado; todo corre en local. Guía para retomarlo: [`despliegue-railway.md`](despliegue-railway.md) |
 | 15 | Seguridad: entornos DEV/PAPER/LIVE, kill switch global | 🟡 flags en código; kill switch operativo en el dashboard local |
 | 16 | Go-live gate (100 €) | 🟡 puerta automática con 10 criterios, panel en el dashboard y aviso (bloque 4); falta el adaptador de broker real |
 
@@ -98,6 +98,30 @@ de pruebas fallaban por muestra insuficiente. Se amplía dónde buscar, sin rela
   vez cuando cambia (banner + webhook opcional al móvil). No activa nada por sí misma.
 - ⏳ Familias de pares, correlación y beta contra benchmark; sincronizar `hypotheses` con la
   tabla `ai_hypotheses` de Supabase.
+
+## Bloque 5 (en curso): reglas documentadas + noticias del día
+
+Petición del usuario (2026-10-02): ¿estudia el sistema reglas como «tres bajadas seguidas y
+rebota» o el patrón de las salidas a bolsa? Respuesta: estudio de reglas con evidencia publicada
+([`estudio-reglas.md`](estudio-reglas.md)) y noticias reales como punto de entrada diario.
+
+- ✅ Estudio: qué reglas probar y con qué respaldo real (A: como en el estudio; B: fuera de sus
+  condiciones; C: sin respaldo académico o con evidencia negativa; D: descartadas, incluido el
+  patrón de IPO). Auditoría de fuentes de todas las familias del sistema.
+- ✅ Features nuevas sin look-ahead: rachas de cierres (`down_streak`, `up_streak`), `rsi_2`,
+  `dist_high_252`, día del mes y días a fin de mes.
+- ✅ Familias nuevas en el lab: `streak_reversion`, `rsi2_reversion`, `ibs_reversion`,
+  `candle_reversal` (1h/4h/1d), `near_52w_high` (1d) y `turn_of_month` (1d, acciones).
+- ✅ Barras diarias en el lab con 5 años de historia (cripto y acciones).
+- ✅ Noticias reales (Alpaca News) como features deterministas (sin LLM, sin look-ahead, NaN
+  sin cobertura) y familias de Chan (2003) y PEAD en acciones; sondeo en vivo cada minuto.
+- ✅ «Noticias del día»: cada día de mercado a las 08:45 de Nueva York el Analista IA lee los
+  titulares reales (con la fecha y si abre el mercado), resume lo importante, descarta lo que no
+  esté en los titulares y propone hipótesis que el lab examina; panel en el dashboard. Nunca opera.
+- ⏳ Pruebas con datos reales (Alpaca + OpenAI) en el PC del usuario:
+  [`pruebas-locales.md`](pruebas-locales.md).
+- ✅ Prueba agrupada (panel) de las reglas diarias: una regla para todo el universo, fechas
+  comunes y una observación por fecha; en vivo, una sola estrategia sobre todos los valores.
 
 ## Próximos pasos técnicos sugeridos
 

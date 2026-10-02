@@ -14,6 +14,7 @@ from aqt.features.cross_section import (
 from aqt.features.engine import FeatureEngine
 from aqt.lab.cycle import KlineData, LabConfig, run_research_cycle
 from aqt.lab.registry import RuleRegistry
+from aqt.news.book import NewsBook
 from aqt.strategies import resolve_strategy
 from aqt.strategies.dsl import Condition, ExitRules, Rule, StrategySpec
 from aqt.strategies.swing import SWING_CATALOG
@@ -85,9 +86,54 @@ def test_calendar_features_and_passthrough() -> None:
         assert col in feats.columns
 
 
+def test_month_calendar_uses_each_bars_own_trading_day() -> None:
+    # A daily stock bar is labelled 00:00 UTC, which in New York is still the previous evening.
+    idx = pd.DatetimeIndex(["2026-09-30", "2026-10-01"], tz="UTC")
+    cal = calendar_features(idx, 86_400, "us_equity")
+    assert list(cal["day_of_month"]) == [30.0, 1.0]
+    assert list(cal["days_to_month_end"]) == [0.0, 30.0]
+    assert list(cal["day_of_week"]) == [2.0, 3.0]  # Wednesday, Thursday
+    crypto = calendar_features(pd.DatetimeIndex(["2026-02-27 23:00"], tz="UTC"), H, "24/7")
+    assert crypto["day_of_month"].iloc[0] == 27 and crypto["days_to_month_end"].iloc[0] == 1
+
+
+def test_catalog_for_keeps_daily_and_equity_effects_where_documented() -> None:
+    stocks = LabConfig(symbols=("A",), timeframes=("15min", "1h", "1d"), session="us_equity")
+    hourly_families = stocks.catalog_for("1h")[1]
+    assert "near_52w_high" not in hourly_families and "turn_of_month" not in hourly_families
+    assert {"streak_reversion", "rsi2_reversion"} <= set(hourly_families)
+    assert "ibs_reversion" not in hourly_families  # documented on daily bars only
+    assert {"near_52w_high", "turn_of_month", "ibs_reversion"} <= set(stocks.catalog_for("1d")[1])
+    crypto = LabConfig(symbols=("A",), session="24/7")
+    daily_crypto = crypto.catalog_for("1d")[1]
+    assert "turn_of_month" not in daily_crypto and "near_52w_high" in daily_crypto
+    assert stocks.catalog_for("15min")[0] == "intraday"
+    assert stocks.days_for("1d") == stocks.daily_days and stocks.days_for("1h") == stocks.days
+
+
+def test_documented_rules_fire_on_their_textbook_setups() -> None:
+    """A long daily uptrend, a new high, then three lower closes."""
+    n = 260
+    close = np.concatenate([np.linspace(100, 160, n - 3), [158.0, 156.0, 154.0]])
+    open_ = np.concatenate([[100.0], close[:-1]])
+    df = pd.DataFrame(
+        {"open": open_, "high": np.maximum(open_, close) * 1.001,
+         "low": np.minimum(open_, close) * 0.999, "close": close, "volume": 1000.0},
+        index=pd.date_range("2025-01-01", periods=n, freq="D", tz="UTC"),
+    )  # fmt: skip
+    feats = FeatureEngine().compute(augment({"A": df}, 86_400, "us_equity")["A"])
+    streak = SWING_CATALOG["streak_reversion"][0].entry_signal(feats)
+    assert streak.iloc[-1] and not streak.iloc[-2]  # three lower closes, not two
+    assert SWING_CATALOG["rsi2_reversion"][0].entry_signal(feats).iloc[-1]
+    assert SWING_CATALOG["near_52w_high"][0].entry_signal(feats).iloc[-4]  # at the high
+    month_end = SWING_CATALOG["turn_of_month"][0].entry_signal(feats)
+    assert month_end.sum() >= 8 and (feats["days_to_month_end"][month_end] <= 2).all()
+
+
 def test_swing_catalog_renders_on_augmented_features() -> None:
     bars = {s: hourly(300, i) for i, s in enumerate("ABCD")}
-    feats = FeatureEngine().compute(augment(bars, H)["A"])
+    news = NewsBook(coverage_start=0.0, covered_until=float("inf"))  # news_* columns for news rules
+    feats = FeatureEngine().compute(augment(bars, H, news=news)["A"])
     for name, (spec, grid) in SWING_CATALOG.items():
         assert grid and resolve_strategy(name, "swing")[0] is spec
         sig = spec.entry_signal(feats)

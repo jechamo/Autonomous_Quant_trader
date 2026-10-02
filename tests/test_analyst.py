@@ -228,7 +228,7 @@ def test_analyst_package_cannot_import_brokers_risk_or_the_engine() -> None:
                 assert ident not in {"place_order", "submit_order"}, path.name
     # transitively, too: importing the analyst loads no broker, risk or engine module
     code = (
-        "import sys, aqt.analyst.client, aqt.analyst.hypotheses\n"
+        "import sys, aqt.analyst.client, aqt.analyst.hypotheses, aqt.analyst.briefing\n"
         f"bad = [m for m in sys.modules if m.startswith({FORBIDDEN!r})]\n"
         "print(bad)\n"
     )

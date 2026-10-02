@@ -11,7 +11,11 @@ Sistema de trading cuantitativo. PRD: `docs/PRD.md`. Estado requisito a requisit
 - `AQT.cmd` / `uv run python -m services.launcher` — menú de arranque (Textual) con todos los modos.
 - `uv run python -m services.trader run` — trader en streaming (PAPER, Binance) + dashboard local
   en `http://127.0.0.1:8000` con el Research Lab programado; `--market stocks` usa Alpaca (claves en
-  `.env`). `research` lanza un ciclo del lab; `simulate [--learn]` reproduce la historia real.
+  `.env`). `research` lanza un ciclo del lab; `simulate [--learn]` reproduce la historia real;
+  `news [--dry-run]` genera «Noticias del día» (titulares de Alpaca + OpenAI).
+- Estudio de reglas (qué se prueba y por qué): `docs/estudio-reglas.md`.
+- Pruebas con datos reales pendientes (para ejecutar en local): `docs/pruebas-locales.md`.
+- Contexto de la sesión que añadió estudio, noticias y prueba agrupada: `docs/sesion-2026-10-02.md`.
 
 ## Regla obligatoria: matriz de trazabilidad
 Todo cambio que implemente, modifique o elimine algo relacionado con un requisito del PRD

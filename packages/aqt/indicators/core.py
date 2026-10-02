@@ -92,6 +92,17 @@ def gap(df: pd.DataFrame) -> pd.Series:
     return df["open"] / df["close"].shift(1) - 1.0
 
 
+def streaks(close: pd.Series) -> pd.DataFrame:
+    """Consecutive closes below (``down_streak``) / above (``up_streak``) the previous close,
+    counted up to and including t. A flat close resets both; the first bar is undefined."""
+    diff = close.diff()
+    out = {}
+    for name, moved in (("down_streak", diff < 0), ("up_streak", diff > 0)):
+        run = moved.astype(int)
+        out[name] = run.groupby((run == 0).cumsum()).cumsum().astype(float)
+    return pd.DataFrame(out, index=close.index).where(diff.notna())
+
+
 def rolling_drawdown(close: pd.Series, window: int = 252) -> pd.Series:
     peak = close.rolling(window, min_periods=1).max()
     return close / peak - 1.0

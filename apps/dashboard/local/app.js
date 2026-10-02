@@ -388,7 +388,7 @@ async function renderLab() {
     const live = r.live || (r.metrics || {}).forward || {};
     return `<tr title="${esc(r.description || r.name)}">
       <td>${esc(r.name)}<div class="muted">${esc(r.rule_id)}</div></td>
-      <td>${esc(r.symbol)}</td>
+      <td>${r.symbol === "*" ? "todos (agrupada)" : esc(r.symbol)}</td>
       <td><span class="pill ${esc(r.status)}">${STATUS_ES[r.status] || esc(r.status)}</span></td>
       <td class="${cls(res.oos_ev)}">${pctOr(res.oos_ev)}</td>
       <td class="${cls(gold.mean_net_return)}">${gold.n_trades != null ? `${pctOr(gold.mean_net_return)} (${gold.n_trades})` : "—"}</td>
@@ -437,6 +437,52 @@ $("lab-run").onclick = async () => {
 };
 renderLab();
 setInterval(renderLab, 5000);
+
+const KIND_ES = {
+  earnings: "resultados", guidance: "previsiones", rating: "analistas", "m&a": "fusiones",
+  fda: "FDA", legal: "legal", macro: "macro", ipo: "salida a bolsa", other: "otros",
+};
+
+async function renderNews() {
+  let n;
+  try {
+    n = await (await fetch("/api/news")).json();
+  } catch { return; }
+  const poll = n.poller;
+  let meta = n.scheduled
+    ? "Se genera solo cada día de mercado a partir de las 8:45 de Nueva York."
+    : "Para generarlo: python -m services.trader news (claves de Alpaca y OPENAI_API_KEY en .env).";
+  if (poll) {
+    meta += ` · Titulares en vivo para las reglas: ${poll.headlines}`
+      + (poll.last_poll ? ` (último sondeo hace ${ago(poll.last_poll)})` : "")
+      + (poll.last_error ? ` · error: ${poll.last_error.slice(0, 60)}` : "");
+  }
+  const b = n.briefing;
+  if (!b) {
+    $("news-meta").textContent = meta;
+    $("news-summary").textContent = "Todavía no hay resumen.";
+    $("news-watch").innerHTML = "";
+    $("news-events").querySelector("tbody").innerHTML = "";
+    $("news-discarded").textContent = "";
+    return;
+  }
+  $("news-meta").textContent = `${b.date} · ${b.n_headlines} titulares leídos · ${b.model || "—"} · hace ${ago(b.created_at)} · ${meta}`;
+  $("news-summary").textContent = b.market_summary || "";
+  $("news-watch").innerHTML = (b.watchlist || []).map((s) => `<span class="pill proposed">${esc(s)}</span>`).join("");
+  const heads = Object.fromEntries((b.headlines || []).map((h) => [h.id, h]));
+  const link = (h) => (String(h.url || "").startsWith("https://")
+    ? `<a href="${esc(h.url)}" target="_blank" rel="noopener noreferrer">${esc(h.headline)}</a>`
+    : esc(h.headline));
+  $("news-events").querySelector("tbody").innerHTML = (b.events || []).map((e) => `<tr>
+      <td>${"★".repeat(e.importance)}</td><td>${esc(KIND_ES[e.type] || e.type)}</td>
+      <td>${esc((e.symbols || []).join(", ") || "—")}</td><td>${esc(e.why_it_matters || "")}</td>
+      <td>${(e.headline_ids || []).filter((id) => heads[id]).map((id) => link(heads[id])).join("<br>")}</td>
+    </tr>`).join("") || `<tr><td colspan="5" class="muted">Sin eventos destacados.</td></tr>`;
+  $("news-discarded").textContent = (b.discarded || []).length
+    ? `Descartado por no estar en los titulares: ${b.discarded.join(" · ")}` : "";
+}
+renderNews();
+setInterval(renderNews, 60000);
 
 async function renderGoLive() {
   let g;

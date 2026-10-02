@@ -27,6 +27,7 @@ from pydantic import ValidationError
 from aqt.analyst.client import AnalystConfig, AnalystError, OpenAIClient
 from aqt.features.cross_section import augment
 from aqt.features.engine import FeatureEngine
+from aqt.news.book import NewsBook
 from aqt.strategies.dsl import ExitRules, Rule, StrategySpec
 
 if TYPE_CHECKING:  # the analyst never imports the store at runtime (it pulls broker types in)
@@ -45,8 +46,9 @@ _NAME = re.compile(r"^[a-z][a-z0-9_]{2,39}$")
 _NON_FEATURES = {"regime"}
 
 
-def available_features(session: str = "24/7") -> list[str]:
-    """Every numeric column a rule can reference (computed on a small synthetic panel)."""
+def available_features(session: str = "24/7", news: bool = False) -> list[str]:
+    """Every numeric column a rule can reference (computed on a small synthetic panel); the
+    ``news_*`` columns only when the lab has a news source."""
     rng = np.random.default_rng(0)
     idx = pd.date_range("2026-01-05 14:00", periods=260, freq="1h", tz="UTC")
     frames = {}
@@ -60,7 +62,8 @@ def available_features(session: str = "24/7") -> list[str]:
              "taker_buy_volume": vol / 2},
             index=idx,
         )  # fmt: skip
-    feats = FeatureEngine().compute(augment(frames, 3600, session)["A"])
+    book = NewsBook(coverage_start=0.0, covered_until=float("inf")) if news else None
+    feats = FeatureEngine().compute(augment(frames, 3600, session, book)["A"])
     numeric = feats.select_dtypes(include="number").columns
     return sorted(c for c in numeric if c not in _NON_FEATURES)
 
@@ -273,17 +276,8 @@ def build_context(
     }
 
 
-SYSTEM_PROMPT = """You are the research analyst of a long-only systematic trading lab. You never \
-trade: you propose testable hypotheses that the lab examines out-of-sample, with walk-forward, \
-Monte Carlo and a global false-discovery-rate correction across every hypothesis tested. Costs \
-are already included in every result you see.
-
-Propose NEW ideas that the context suggests are worth testing — not variations of rules that \
-already failed for the same reason. Prefer economically motivated effects (momentum, reversal, \
-volatility, liquidity, calendar, cross-sectional ranking) at the allowed timeframes. Each \
-hypothesis is one long-only rule in this JSON DSL:
-
-{"hypotheses": [{
+# One hypothesis in the lab's JSON DSL (shared by the analyst and the morning news briefing).
+HYPOTHESIS_SCHEMA = """{
   "name": "snake_case_name",
   "timeframe": "<one of allowed_timeframes>",
   "claim": "what effect you expect and why",
@@ -295,11 +289,30 @@ hypothesis is one long-only rule in this JSON DSL:
 "max_holding_bars": <integer | "$param">, "exit_signal": null | {"all_of": [...]}},
   "params": {"param": <default number>},
   "grid": {"param": [<2-4 numbers>]}
-}]}
+}"""
+HYPOTHESIS_RULES = """Rules: use only features from available_features; every rule needs \
+stop_atr_mult and max_holding_bars; at most 8 parameter combinations per hypothesis; at most \
+{max_hypotheses} hypotheses."""
 
-Rules: use only features from available_features; every rule needs stop_atr_mult and \
-max_holding_bars; at most 8 parameter combinations per hypothesis; at most {max_hypotheses} \
-hypotheses. Answer with the JSON object only."""
+SYSTEM_PROMPT = (
+    """You are the research analyst of a long-only systematic trading lab. You never \
+trade: you propose testable hypotheses that the lab examines out-of-sample, with walk-forward, \
+Monte Carlo and a global false-discovery-rate correction across every hypothesis tested. Costs \
+are already included in every result you see.
+
+Propose NEW ideas that the context suggests are worth testing — not variations of rules that \
+already failed for the same reason. Prefer economically motivated effects (momentum, reversal, \
+volatility, liquidity, calendar, cross-sectional ranking) at the allowed timeframes. Each \
+hypothesis is one long-only rule in this JSON DSL:
+
+{"hypotheses": ["""
+    + HYPOTHESIS_SCHEMA
+    + """]}
+
+"""
+    + HYPOTHESIS_RULES
+    + " Answer with the JSON object only."
+)
 
 
 def run_analyst(
@@ -311,11 +324,12 @@ def run_analyst(
     families: dict[str, str],
     session: str = "24/7",
     clock: Callable[[], float] = time.time,
+    news: bool = False,
 ) -> AnalystResult:
     hyps = HypothesisStore(store, clock)
     if hyps.calls_today() >= cfg.max_calls_per_day:
         return AnalystResult(skipped=f"daily budget reached ({cfg.max_calls_per_day} calls)")
-    features = available_features(session)
+    features = available_features(session, news)
     context = build_context(store, market, timeframes, families, features, hyps)
     system = SYSTEM_PROMPT.replace("{max_hypotheses}", str(cfg.max_hypotheses))
     hyps.count_call()
@@ -324,9 +338,28 @@ def run_analyst(
     except AnalystError as exc:
         return AnalystResult(skipped=str(exc))
     result = AnalystResult(usage=completion.usage)
+    result.created, result.rejected = ingest_proposals(
+        hyps, completion.content.get("hypotheses"), features, timeframes,
+        completion.model, completion.usage, cfg.max_hypotheses,
+    )  # fmt: skip
+    return result
+
+
+def ingest_proposals(
+    hyps: HypothesisStore,
+    raw_list: Any,
+    features: Sequence[str],
+    timeframes: Sequence[str],
+    model: str,
+    usage: dict[str, Any],
+    limit: int,
+) -> tuple[list[Proposal], list[tuple[str, str]]]:
+    """Validate the model's proposals; valid, new ones wait for the lab, the rest are kept with
+    the reason they were refused."""
+    created: list[Proposal] = []
+    rejected: list[tuple[str, str]] = []
     known = hyps.known_hashes()
-    raw_list = completion.content.get("hypotheses") or []
-    for raw in raw_list[: cfg.max_hypotheses] if isinstance(raw_list, list) else []:
+    for raw in raw_list[:limit] if isinstance(raw_list, list) else []:
         name = str(raw.get("name", "")) if isinstance(raw, dict) else ""
         try:
             if not isinstance(raw, dict):
@@ -335,10 +368,10 @@ def run_analyst(
             if rule_key(proposal) in known:
                 raise ValueError("duplicate of an earlier hypothesis")
         except ValueError as exc:
-            result.rejected.append((name, str(exc)))
-            hyps.add_invalid(name, str(exc), completion.model)
+            rejected.append((name, str(exc)))
+            hyps.add_invalid(name, str(exc), model)
             continue
-        hyps.add(proposal, completion.model, completion.usage)
+        hyps.add(proposal, model, usage)
         known.add(rule_key(proposal))
-        result.created.append(proposal)
-    return result
+        created.append(proposal)
+    return created, rejected

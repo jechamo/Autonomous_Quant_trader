@@ -172,5 +172,8 @@ h3 { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: var(--muted);
 .pill.proposed { background: #1e3a5f; color: #93c5fd; }
 .pill.promoted { background: #14532d; color: #86efac; }
 .pill.rejected, .pill.invalid { background: #27303d; color: var(--muted); }
-#ai-hyps td { white-space: normal; vertical-align: top; }
+#ai-hyps td, #news-events td { white-space: normal; vertical-align: top; }
+.news-summary { line-height: 1.5; margin: 0 0 10px; }
+#news-events a { color: var(--accent); text-decoration: none; }
+#news-events a:hover { text-decoration: underline; }
 @media (max-width: 1100px) { .lab-grid { grid-template-columns: minmax(0, 1fr); } }

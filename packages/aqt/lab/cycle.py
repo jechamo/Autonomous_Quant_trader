@@ -20,7 +20,7 @@ from __future__ import annotations
 import os
 import time
 from collections import Counter
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Any, Protocol
 
@@ -32,14 +32,27 @@ from aqt.backtest.costs import CostModel
 from aqt.features.cross_section import augment
 from aqt.features.engine import FeatureEngine
 from aqt.lab.registry import RuleRecord, RuleRegistry, RuleStatus
-from aqt.research.study import StudyConfig, apply_global_fdr, run_study
+from aqt.news.book import NewsBook
+from aqt.news.items import NewsItem
+from aqt.research.study import StudyConfig, apply_global_fdr, run_panel_study, run_study
 from aqt.strategies.dsl import StrategySpec
 from aqt.strategies.intraday import INTRADAY_CATALOG
-from aqt.strategies.swing import SWING_CATALOG
-from aqt.stream.dsl_strategy import DslStreamStrategy, ResearchBarBook, rule_id_for
+from aqt.strategies.swing import SWING_CATALOG, swing_families_for
+from aqt.stream.dsl_strategy import (
+    DslStreamStrategy,
+    PanelDslStrategy,
+    ResearchBarBook,
+    rule_id_for,
+)
 from aqt.stream.engine import EngineConfig, StreamingEngine
 from aqt.stream.events import Event
-from aqt.stream.history import TIMEFRAME_SECONDS, kline_events, resample_bars, resample_klines
+from aqt.stream.history import (
+    TIMEFRAME_SECONDS,
+    kline_events,
+    merge_events,
+    resample_bars,
+    resample_klines,
+)
 from aqt.stream.session import UsEquitySession
 from aqt.stream.stocks import bar_events, with_bvc
 from aqt.stream.store import SQLiteStore
@@ -47,6 +60,7 @@ from aqt.stream.store import SQLiteStore
 KlineLoader = Callable[[str, int, int], pd.DataFrame]
 BarLoader = Callable[[str, int, int], pd.DataFrame]
 IntervalLoader = Callable[[str, int, int, str], pd.DataFrame]
+NewsLoader = Callable[[Sequence[str], int, int], list[NewsItem]]
 _TIMEFRAMES = {k: float(v) for k, v in TIMEFRAME_SECONDS.items()}
 
 
@@ -58,6 +72,11 @@ class LabConfig:
     timeframe: str = "1min"
     timeframes: tuple[str, ...] = ()  # several timeframes in one cycle (default: ``timeframe``)
     intraday_days: float = 7.0  # 1-minute research uses at most this much (1-second klines)
+    daily_days: float = 1825.0  # daily bars need years: 252-bar warm-up + enough trades per symbol
+    news_days: float = 1095.0  # headline history for the news_* features (needs a news loader)
+    # Timeframes researched pooled over the universe (one rule for all symbols, dates as the
+    # unit of evidence): daily anomalies fire too rarely per symbol to be tested one by one.
+    panel_timeframes: tuple[str, ...] = ("1d",)
     fee_pct: float = 0.001
     spread_pct: float = 0.0001
     slippage_pct: float = 0.0005
@@ -83,14 +102,19 @@ class LabConfig:
     def all_timeframes(self) -> tuple[str, ...]:
         return self.timeframes or (self.timeframe,)
 
-    def catalog_for(self, timeframe: str) -> tuple[str, tuple[str, ...]]:
-        """Swing catalog from one hour up (holds overnight), intraday catalog below."""
-        if _TIMEFRAMES[timeframe] >= 3600:
-            return "swing", self.swing_families
+    def catalog_for(self, timeframe: str, news: bool = False) -> tuple[str, tuple[str, ...]]:
+        """Swing catalog from one hour up (holds overnight), intraday catalog below. Daily-only,
+        equity-only and news swing families are left out where they cannot be tested."""
+        tf_s = _TIMEFRAMES[timeframe]
+        if tf_s >= 3600:
+            return "swing", swing_families_for(self.swing_families, tf_s, self.session, news)
         return "intraday", self.families
 
     def days_for(self, timeframe: str) -> float:
-        """Crypto 1-minute research is built from 1-second klines: cap how much is downloaded."""
+        """Crypto 1-minute research is built from 1-second klines: cap how much is downloaded.
+        Daily bars get ``daily_days`` of history."""
+        if _TIMEFRAMES[timeframe] >= 86_400:
+            return self.daily_days
         crypto_minute = timeframe == "1min" and self.session == "24/7"
         return min(self.days, self.intraday_days) if crypto_minute else self.days
 
@@ -237,14 +261,59 @@ def golden_check(
     }
 
 
+def golden_check_panel(
+    data: LabData,
+    research_features: dict[str, pd.DataFrame],
+    spec: StrategySpec,
+    oos_start: pd.Timestamp,
+    end_ms: int,
+    cfg: LabConfig,
+    timeframe: str,
+) -> dict[str, Any]:
+    """Golden check of a pooled rule: every symbol's out-of-sample events through one engine,
+    with the rule as a single strategy (as it would trade live)."""
+    tf = _TIMEFRAMES[timeframe]
+    symbols = tuple(research_features)
+    book = ResearchBarBook()
+    for sym, feats in research_features.items():
+        book.preload(sym, tf, feats)
+    strat = PanelDslStrategy(spec=spec, symbols=symbols, timeframe_s=tf, book=book)
+    eng = StreamingEngine(
+        EngineConfig(
+            symbols=symbols,
+            bar_seconds=5.0,
+            fee_pct=cfg.fee_pct,
+            expected_slippage_pct=cfg.slippage_pct,
+            latency_s=cfg.latency_s,
+            run_id="golden",
+            session=cfg.session,
+        ),
+        strategies=[strat],
+    )
+    start = int(oos_start.timestamp() * 1000)
+    for event in merge_events([data.events(s, start, end_ms, timeframe) for s in symbols]):
+        eng.on_event(event)
+    eng.shutdown()
+    r = np.asarray(eng.evidence.returns(strat.strategy_id), dtype=float)
+    mean = float(r.mean()) if r.size else 0.0
+    return {
+        "n_trades": int(r.size),
+        "mean_net_return": mean,
+        "passed": bool(r.size >= cfg.golden_min_trades and mean > 0),
+        "symbols": len(symbols),
+    }
+
+
 def run_research_cycle(
     store: SQLiteStore,
     cfg: LabConfig,
     loader: KlineLoader | LabData,
     end_ms: int | None = None,
     clock: Callable[[], float] = time.time,
+    news_loader: NewsLoader | None = None,
 ) -> CycleResult:
-    """``loader`` is a 1-second kline loader (crypto) or any :class:`LabData` (e.g. stocks)."""
+    """``loader`` is a 1-second kline loader (crypto) or any :class:`LabData` (e.g. stocks).
+    With a ``news_loader`` (stocks + Alpaca keys) the news features and families are tested."""
     data: LabData = (
         loader
         if isinstance(loader, KlineData | BarData)
@@ -257,13 +326,29 @@ def run_research_cycle(
         {**asdict(cfg), "start_ms": start_ms, "end_ms": end_ms, "symbols": list(cfg.symbols)}
     )
     try:
-        summary, promoted = _cycle(registry, cfg, data, start_ms, end_ms, run_id)
+        summary, promoted = _cycle(registry, cfg, data, start_ms, end_ms, run_id, news_loader)
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
         registry.finish_run(run_id, {}, status="error", error=error)
         return CycleResult(run_id, {}, [], error)
     registry.finish_run(run_id, summary)
     return CycleResult(run_id, summary, promoted)
+
+
+def _load_news(
+    cfg: LabConfig, end_ms: int, loader: NewsLoader | None
+) -> tuple[NewsBook | None, dict[str, Any]]:
+    """Headlines for the news features; a news outage only switches the news families off."""
+    if loader is None:
+        return None, {"enabled": False}
+    start_ms = end_ms - int(cfg.news_days * 86_400_000)
+    try:
+        items = loader(cfg.symbols, start_ms, end_ms)
+    except Exception as exc:
+        return None, {"enabled": False, "error": f"{type(exc).__name__}: {exc}"[:300]}
+    book = NewsBook(start_ms / 1000, end_ms / 1000)
+    book.add(items)
+    return book, {"enabled": True, "headlines": len(items), "days": cfg.news_days}
 
 
 def _cycle(
@@ -273,8 +358,10 @@ def _cycle(
     start_ms: int,
     end_ms: int,
     run_id: int,
+    news_loader: NewsLoader | None = None,
 ) -> tuple[dict[str, Any], list[str]]:
     costs = cfg.costs
+    news, news_info = _load_news(cfg, end_ms, news_loader)
     hyp_store = HypothesisStore(registry.store) if cfg.include_ai_hypotheses else None
     tested_hyps: dict[str, int] = {}  # AI hypothesis name -> id
     studies: list[tuple[str, Any]] = []
@@ -290,13 +377,24 @@ def _cycle(
                 n_bars[f"{sym}@{tf}"] = len(b)
         if not raw:
             continue
-        augmented[tf] = augment(raw, _TIMEFRAMES[tf], cfg.session)
-        catalog, families = cfg.catalog_for(tf)
+        augmented[tf] = augment(raw, _TIMEFRAMES[tf], cfg.session, news)
+        catalog, families = cfg.catalog_for(tf, news=news is not None)
         ai_specs: dict[str, tuple[StrategySpec, dict[str, list[float | int]]]] = {}
-        for h in hyp_store.pending(tf) if hyp_store is not None else []:
-            ai_specs[h["name"]] = (h["spec_obj"], h["grid_obj"])
+        pending = hyp_store.pending(tf) if hyp_store is not None else []
+        columns: set[str] = set()
+        if pending:
+            columns = set(FeatureEngine().compute(next(iter(augmented[tf].values()))).columns)
+        for h in pending:
+            spec = h["spec_obj"]
+            used = spec.entry.features_used() | (
+                spec.exit.exit_signal.features_used() if spec.exit.exit_signal else set()
+            )
+            if not used <= columns:
+                continue  # e.g. news features without a news source: stays pending
+            ai_specs[h["name"]] = (spec, h["grid_obj"])
             tested_hyps[h["name"]] = h["id"]
-        study = run_study(
+        runner = run_panel_study if tf in cfg.panel_timeframes else run_study
+        study = runner(
             augmented[tf],
             [*families, *ai_specs],
             StudyConfig(
@@ -340,8 +438,12 @@ def _cycle(
         tf_s = _TIMEFRAMES[tf]
         spec = StrategySpec.model_validate(pair.report["selected_strategy"]["spec"])
         oos_start = pd.Timestamp(pair.report["out_of_sample"]["period"][0])
-        features = FeatureEngine().compute(augmented[tf][pair.symbol])
-        golden = golden_check(data, features, spec, pair.symbol, oos_start, end_ms, cfg, tf)
+        if pair.symbol == "*":
+            panel = {s: FeatureEngine().compute(f) for s, f in augmented[tf].items()}
+            golden = golden_check_panel(data, panel, spec, oos_start, end_ms, cfg, tf)
+        else:
+            features = FeatureEngine().compute(augmented[tf][pair.symbol])
+            golden = golden_check(data, features, spec, pair.symbol, oos_start, end_ms, cfg, tf)
         rid = rule_id_for(spec, pair.symbol, tf_s)
         research = {
             k: pair.summary().get(k)
@@ -386,6 +488,7 @@ def _cycle(
         "n_bars": n_bars,
         "hypotheses_by_timeframe": per_tf,
         "families": list(cfg.families) + list(cfg.swing_families),
+        "news": news_info,
         "n_pairs": len(tagged),
         "n_hypotheses": n_hypotheses,
         "n_global_discoveries": n_discoveries,

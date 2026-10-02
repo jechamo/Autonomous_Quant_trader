@@ -17,6 +17,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from aqt.lab.learning import learn_meta_filters
 from aqt.lab.live import sync_engine_rules
@@ -27,6 +28,7 @@ from aqt.stream.engine import StreamingEngine
 from aqt.stream.store import SQLiteStore
 
 log = logging.getLogger(__name__)
+NY = ZoneInfo("America/New_York")
 
 # research(end_ts) -> "" on success or an error message
 ResearchRunner = Callable[[float], Awaitable[str]]
@@ -43,6 +45,9 @@ class LabStatus:
     last_error: str = ""
     last_changes: int = 0
     last_review: float | None = None
+    briefing: bool = False
+    last_briefing: float | None = None
+    briefing_error: str = ""
 
 
 def subprocess_runner(
@@ -56,6 +61,23 @@ def subprocess_runner(
             sys.executable, "-m", "services.trader", "research",
             "--db", db_path, "--symbols", ",".join(symbols), "--days", str(days),
             "--end", end, "--no-review", *extra,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )  # fmt: skip
+        out, err = await proc.communicate()
+        if proc.returncode != 0:
+            return (err or out).decode("utf-8", "replace")[-500:] or f"exit {proc.returncode}"
+        return ""
+
+    return run
+
+
+def news_runner(db_path: str, market: str, symbols: list[str]) -> ResearchRunner:
+    """Run ``python -m services.trader news`` (the morning briefing) as a child process."""
+
+    async def run(now: float) -> str:
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, "-m", "services.trader", "news", "--db", db_path,
+            "--market", market, "--symbols", ",".join(symbols),
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         )  # fmt: skip
         out, err = await proc.communicate()
@@ -81,6 +103,8 @@ class LabScheduler:
         review_cfg: ReviewConfig | None = None,
         on_pause: Callable[[bool], None] | None = None,
         seeder: Callable[[float], None] | None = None,
+        briefing: ResearchRunner | None = None,
+        briefing_at: tuple[int, int] = (8, 45),
     ) -> None:
         self.engine = engine
         self.store = store
@@ -96,8 +120,11 @@ class LabScheduler:
         # Loads history for a timeframe the first time an active rule needs it (no warm-up).
         self.seeder = seeder
         self._seeded: set[float] = {60.0}
+        # Morning news briefing once per New York weekday, from ``briefing_at`` (before the open).
+        self.briefing = briefing
+        self.briefing_at = briefing_at
         enabled = research is not None and every_s > 0
-        self.state = LabStatus(enabled=enabled, every_s=every_s)
+        self.state = LabStatus(enabled=enabled, every_s=every_s, briefing=briefing is not None)
         done = [r["finished_at"] for r in self.registry.runs(1) if r["finished_at"]]
         self.state.last_finished = done[0] if done else None
         if enabled:
@@ -175,6 +202,28 @@ class LabScheduler:
             log.warning("research cycle failed: %s", self.state.last_error)
         await self.review_async()
 
+    def briefing_due(self, now: float) -> bool:
+        if self.briefing is None:
+            return False
+        ny = datetime.fromtimestamp(now, NY)
+        if ny.weekday() >= 5 or (ny.hour, ny.minute) < self.briefing_at:
+            return False
+        return self.store.get_setting("briefing_last_attempt") != ny.date().isoformat()
+
+    async def run_briefing(self, now: float) -> None:
+        """One attempt per day (a failure is reported, not retried in a loop)."""
+        assert self.briefing is not None
+        self.store.set_setting(
+            "briefing_last_attempt", datetime.fromtimestamp(now, NY).date().isoformat()
+        )
+        try:
+            self.state.briefing_error = await self.briefing(now)
+        except Exception as exc:  # the briefing must never take the trader down
+            self.state.briefing_error = f"{type(exc).__name__}: {exc}"
+        self.state.last_briefing = self.clock()
+        if self.state.briefing_error:
+            log.warning("news briefing failed: %s", self.state.briefing_error)
+
     def trigger(self) -> bool:
         """Start a research cycle now (dashboard button). False if one is already running."""
         if self.research is None or self.state.running:
@@ -186,6 +235,8 @@ class LabScheduler:
         await self.review_async()
         while True:
             now = self.clock()
+            if self.briefing_due(now):
+                await self.run_briefing(now)
             due = self.state.next_due
             if self.state.enabled and due is not None and now >= due and not self.state.running:
                 await self.run_now()
