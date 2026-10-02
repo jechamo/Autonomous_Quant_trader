@@ -17,7 +17,7 @@ Detalle requisito por requisito en [`prd-traceability.md`](prd-traceability.md).
 | 11 | AI Analyst (OpenAI) con salida estructurada, sin acceso a órdenes | ✅ local: propone hipótesis en el DSL que el Research Lab examina (bloque 4); sincronización con Supabase ⏳ |
 | 12 | Autonomous Research Loop (Railway cron) | 🟡 bucle completo en local (research cada 6 h, revisión y meta-learning cada hora); Railway ⏳ |
 | 13 | Dashboard | 🟡 dashboard local en localhost ✅; Lovable/Vercel ⏳ |
-| 14 | Deploy (Vercel / Supabase / Railway) | ⏳ (de momento todo corre en local) |
+| 14 | Deploy (Vercel / Supabase / Railway) | ⏳ aparcado; todo corre en local. Guía para retomarlo: [`despliegue-railway.md`](despliegue-railway.md) |
 | 15 | Seguridad: entornos DEV/PAPER/LIVE, kill switch global | 🟡 flags en código; kill switch operativo en el dashboard local |
 | 16 | Go-live gate (100 €) | 🟡 puerta automática con 10 criterios, panel en el dashboard y aviso (bloque 4); falta el adaptador de broker real |
 

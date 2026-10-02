@@ -7,7 +7,7 @@ existen y que el resumen cuadra con las filas.
 
 **Leyenda:** ✅ hecho · 🟡 parcial · ⏳ pendiente · 🚫 excluido por diseño (y forzado en código)
 
-**Última actualización:** 2026-10-02 · Auditoría de fuentes de todas las reglas
+**Última actualización:** 2026-10-02 · Auditoría de fuentes de todas las reglas y guía de despliegue en Railway
 
 <!-- summary:start -->
 | Estado | Requisitos |
@@ -366,7 +366,7 @@ lectura para `authenticated`, sin acceso `anon` y escritura sólo vía `service_
 | R21.01 | Research / Trading / Risk en Python | ✅ | `packages/aqt` | — | Trading: trader en streaming (paper) en `packages/aqt/stream` + `services/trader` |
 | R21.02 | Historical data en Parquet + DuckDB | ✅ | `packages/aqt/data/store.py::ParquetStore` | `tests/test_data.py::test_parquet_roundtrip` | — |
 | R21.03 | Supabase PostgreSQL | ✅ | `supabase/migrations` | — | — |
-| R21.04 | Worker en Railway | ⏳ | — | — | — |
+| R21.04 | Worker en Railway | ⏳ | `docs/despliegue-railway.md` | — | Guía escrita, sin implementar (aparcado por el usuario, 2026-10-02): Dockerfile, volumen para `data/`, variables, reinicio; requiere antes acceso autenticado al dashboard |
 | R21.05 | Frontend Lovable / Next.js en Vercel | ⏳ | `apps/dashboard/README.md` | — | — |
 | R21.06 | BrokerAdapter abstracto | ✅ | `packages/aqt/brokers/base.py::BrokerAdapter` | `tests/test_brokers.py::test_simulated_buy_sell_cycle` | — |
 | R21.07 | Trading212Adapter | ⏳ | `packages/aqt/brokers/trading212.py::Trading212Broker` | `tests/test_brokers.py::test_trading212_guardrails` | Stub con guardarraíles |
@@ -440,7 +440,7 @@ lectura para `authenticated`, sin acceso `anon` y escritura sólo vía `service_
 | R30.11 | Paso 11 — AI Analyst | ✅ | `packages/aqt/analyst/client.py::OpenAIClient`, `services/trader/cli.py::analyst` | `tests/test_analyst.py::test_analyst_cli_dry_run_off_and_mocked_call` | Local: `python -m services.trader analyst` o antes de cada ciclo de research (cada 6 h con el lab); presupuesto diario de llamadas |
 | R30.12 | Paso 12 — Autonomous Research Loop | 🟡 | `packages/aqt/lab/cycle.py::run_research_cycle`, `services/trader/lab_scheduler.py::LabScheduler` | `tests/test_lab.py::test_cycle_discovers_planted_edge_and_ignores_noise` | Bucle local completo (research → golden → challenger → review → meta-learning); Railway pendiente |
 | R30.13 | Paso 13 — Dashboard | 🟡 | `apps/dashboard/local/index.html`, `services/trader/app.py::create_app` | `tests/test_trader_service.py::test_api_state_control_and_persistence` | Dashboard local en localhost ✅; versión Lovable/Vercel ⏳ |
-| R30.14 | Paso 14 — Deploy | ⏳ | — | — | — |
+| R30.14 | Paso 14 — Deploy | ⏳ | `docs/despliegue-railway.md` | — | Aparcado; guía para retomarlo en Railway (R21.04) |
 | R30.15 | Paso 15 — Seguridad: entornos y doble flag LIVE | ✅ | `packages/aqt/common/config.py::load_settings` | `tests/test_config.py::test_live_requires_both_flags` | — |
 | R30.16 | Paso 15 — Claves distintas por entorno | 🟡 | `.env.example` | — | Variables separadas demo/live; falta gestor de secretos |
 | R30.17 | Paso 15 — Global kill switch en dashboard | ✅ | `services/trader/app.py::create_app`, `services/trader/runtime.py::TraderRuntime` | `tests/test_trader_service.py::test_api_state_control_and_persistence` | Local: botón en el dashboard, leído por el trader y persistido; columna Supabase auditada para la versión desplegada |
