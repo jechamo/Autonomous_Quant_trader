@@ -6,6 +6,19 @@ from aqt.data import generate_ohlcv
 from aqt.features import FeatureEngine
 
 
+@pytest.fixture(autouse=True)
+def _no_real_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tests never read the developer's .env nor see real API keys (no accidental network)."""
+    from aqt.stream.alpaca import ENDPOINT_ALIASES, KEY_ALIASES, SECRET_ALIASES
+
+    import services.trader.cli as cli
+
+    monkeypatch.setattr(cli, "load_dotenv", lambda *a, **k: [])
+    openai = ("OPENAI_API_KEY", "OPENAI_MODEL_STRONG", "OPENAI_MODEL_CHEAP")
+    for name in (*KEY_ALIASES, *SECRET_ALIASES, *ENDPOINT_ALIASES, *openai):
+        monkeypatch.delenv(name, raising=False)
+
+
 @pytest.fixture(scope="session")
 def ohlcv() -> pd.DataFrame:
     return generate_ohlcv(1200, seed=11)

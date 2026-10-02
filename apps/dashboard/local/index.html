@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AQT Streaming</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">◆</span>
+      <div>
+        <div class="title">Autonomous Quant Trader</div>
+        <div class="subtitle">Streaming · <span id="source">Binance spot</span> · <span id="mode" class="badge paper">PAPER</span></div>
+      </div>
+    </div>
+    <div class="feed">
+      <span id="feed-dot" class="dot"></span>
+      <span id="feed-text">conectando…</span>
+    </div>
+    <div class="controls">
+      <div id="sim-controls" class="seg hidden" title="Velocidad de la simulación (× tiempo real)">
+        <button data-speed="60">×60</button>
+        <button data-speed="300">×300</button>
+        <button data-speed="1000">×1000</button>
+        <button data-speed="0">máx.</button>
+      </div>
+      <label class="slider">
+        <span>Agresividad <b id="agg-val">50</b></span>
+        <input id="agg" type="range" min="0" max="100" step="5" value="50">
+      </label>
+      <button id="pause" class="btn" title="Deja de abrir posiciones nuevas. Las abiertas siguen gestionándose (stop, objetivo, tiempo).">Pausar</button>
+      <button id="flatten" class="btn warn" title="Pausa las entradas y vende ya todas las posiciones abiertas (pide un segundo clic).">Cerrar todo</button>
+      <button id="kill" class="btn kill" title="Freno de emergencia: el Risk Engine rechaza TODA orden, también las ventas. Se reactiva con dos clics.">KILL SWITCH</button>
+    </div>
+  </header>
+
+  <div id="banner" class="banner hidden"></div>
+  <div id="golive-banner" class="banner ready hidden"></div>
+
+  <section class="kpis">
+    <div class="kpi"><div class="k">Equity</div><div class="v" id="k-equity">—</div><div class="s" id="k-equity-s"></div></div>
+    <div class="kpi"><div class="k">P&amp;L hoy</div><div class="v" id="k-day">—</div><div class="s" id="k-dd"></div></div>
+    <div class="kpi"><div class="k">Realizado</div><div class="v" id="k-real">—</div><div class="s" id="k-fees"></div></div>
+    <div class="kpi"><div class="k">Operaciones paper</div><div class="v" id="k-trades">—</div><div class="s" id="k-win"></div></div>
+    <div class="kpi"><div class="k">Señales</div><div class="v" id="k-signals">—</div><div class="s" id="k-sig-s"></div></div>
+    <div class="kpi"><div class="k">Coste ida y vuelta</div><div class="v" id="k-cost">—</div><div class="s" id="k-cost-s"></div></div>
+  </section>
+
+  <main class="grid">
+    <section class="panel chart-panel">
+      <div class="panel-head">
+        <div id="tabs" class="tabs"></div>
+        <div class="muted" id="chart-meta"></div>
+      </div>
+      <div id="chart" class="chart"></div>
+      <div id="flow" class="flow"></div>
+    </section>
+
+    <aside class="panel side">
+      <h3>Mercado</h3>
+      <div id="symbols"></div>
+    </aside>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h3>Estrategias · evidencia en sombra (forward, neta de costes, BH-FDR)</h3>
+        <div class="muted" id="thresholds"></div>
+      </div>
+      <div class="scroll-x"><table class="table" id="strategies">
+        <thead><tr><th>Estrategia</th><th title="Señales que cubren costes (episodios)">Señales</th><th title="Señales descartadas porque el objetivo no paga 2× el coste ida y vuelta">Bloq. coste</th><th title="Último objetivo propuesto frente al mínimo que exigen los costes">Objetivo / mín.</th><th>n</th><th>Win %</th><th>EV neto</th><th>p ajust.</th><th>Edge</th><th title="Rentabilidad compuesta si se hubieran operado TODAS sus señales con todo el capital (sin filtro de evidencia)">Sin filtro</th><th>Abiertas</th><th>Estado</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h3>Curva de equity</h3>
+        <div class="muted"><span class="legend" style="--c:#60a5fa"></span>tu cartera <span class="legend" style="--c:#a78bfa"></span>Buy &amp; Hold</div>
+      </div>
+      <div id="equity" class="equity"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h3>Operaciones</h3>
+        <div class="seg" id="book-seg">
+          <button data-book="paper" class="on">Paper</button>
+          <button data-book="shadow">Sombra</button>
+        </div>
+      </div>
+      <div class="scroll">
+        <table class="table" id="trades">
+          <thead><tr><th>Cierre</th><th>Símbolo</th><th>Estrategia</th><th>Entrada</th><th>Salida</th><th>Neto</th><th>P&amp;L</th><th>Motivo</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h3>Decisiones del Risk Engine</h3>
+      <div class="scroll"><ul id="decisions" class="decisions"></ul></div>
+    </section>
+    <section class="panel wide" id="learn-panel">
+      <h3>Aprendizaje</h3>
+      <div class="learn">
+        <svg id="circuit" viewBox="0 0 870 320" role="img" aria-label="Circuito de aprendizaje"></svg>
+        <div class="orbs">
+          <div class="orb" id="orb-rules" style="--c: var(--accent)"></div>
+          <div class="orb" id="orb-ml" style="--c: var(--shadow)"></div>
+          <div class="orb" id="orb-real" style="--c: var(--up)"></div>
+        </div>
+      </div>
+    </section>
+    <section class="panel wide" id="golive-panel">
+      <div class="panel-head">
+        <h3>Puerta a real · ¿listo para dinero real?</h3>
+        <span class="muted" id="golive-status">—</span>
+      </div>
+      <div class="gbar"><div class="gbar-fill" id="golive-bar"></div><span id="golive-pct">0 %</span></div>
+      <p class="muted">Se evalúa cada hora sobre esta cuenta paper. Cuando todo esté en verde verás un aviso aquí arriba
+        (y en el móvil si configuras <code>NOTIFY_WEBHOOK_URL</code>). Nada se activa solo: pasar a real es decisión tuya.</p>
+      <div class="scroll-x">
+        <table class="table" id="golive-table">
+          <thead><tr><th></th><th>Criterio</th><th>Ahora</th><th>Objetivo</th><th>Detalle</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+    <section class="panel lab wide">
+      <div class="panel-head">
+        <h3>Research Lab · aprendizaje continuo</h3>
+        <div class="lab-actions">
+          <span class="muted" id="lab-status">—</span>
+          <button id="lab-run" class="btn" title="Lanza ahora un ciclo de research en segundo plano (no bloquea el trading)">Investigar ahora</button>
+        </div>
+      </div>
+      <p class="muted lab-explain">
+        Ciclo: <b>research</b> (miles de variantes de reglas sobre la historia reciente, validación fuera de muestra y FDR)
+        → <b>challenger</b> (opera en sombra, sin dinero, ganando evidencia real) → <b>champion</b> (su evidencia
+        convence al Risk Engine: opera en paper) → <b>retirada</b> si deja de funcionar. Cada paso deja una lección.
+      </p>
+      <div class="lab-counts" id="lab-counts"></div>
+      <div class="scroll-x">
+        <table class="table" id="lab-rules">
+          <thead><tr><th>Regla</th><th>Símbolo</th><th>Estado</th><th title="EV fuera de muestra en el research">EV research</th><th title="Replay con el motor real en el periodo fuera de muestra">Golden</th><th title="Operaciones en sombra desde que está viva">Forward n</th><th>EV forward</th><th>Edge</th><th>Actualizada</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="lab-grid">
+        <div>
+          <h4>Promociones y retiradas</h4>
+          <ul class="decisions" id="lab-events"></ul>
+        </div>
+        <div>
+          <h4>Lecciones</h4>
+          <ul class="decisions" id="lab-lessons"></ul>
+        </div>
+        <div>
+          <h4>Ciclos de research</h4>
+          <table class="table" id="lab-runs">
+            <thead><tr><th>#</th><th>Fecha</th><th>Hipótesis</th><th>FDR</th><th>Cand.</th><th>Prom.</th><th>Estado</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+    <section class="panel wide">
+      <div class="panel-head">
+        <h3>Analista IA · hipótesis propuestas</h3>
+        <span class="muted">Solo propone ideas; el Research Lab las examina igual que las demás. Nunca opera.</span>
+      </div>
+      <div class="scroll-x">
+        <table class="table" id="ai-hyps">
+          <thead><tr><th>Fecha</th><th>Hipótesis</th><th>Timeframe</th><th>Qué espera y por qué</th><th>Estado</th><th>Resultado del lab</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot muted">
+    Modo PAPER: dinero simulado. Las órdenes se simulan contra el libro real con latencia y comisiones, o se envían a la cuenta paper de Alpaca.
+    Ningún LLM decide órdenes; toda orden pasa por el Risk Engine. «NO TRADE» es una decisión válida.
+  </footer>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -23,6 +23,7 @@ build/
 data/parquet/**
 !data/parquet/.gitkeep
 reports/
+data/stream/
 
 # Editors / OS
 .vscode/

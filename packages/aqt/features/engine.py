@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 from aqt.common.types import validate_ohlcv
+from aqt.features.cross_section import CALENDAR_COLUMNS, PASSTHROUGH_PREFIXES
 from aqt.indicators import (
     atr,
     bollinger_position,
@@ -66,6 +67,7 @@ class FeatureEngine:
     vol_window: int = 20
     atr_window: int = 14
     rsi_window: int = 14
+    flow_windows: Sequence[int] = (5, 15)
     regime: RegimeClassifier = field(default_factory=RegimeClassifier)
 
     def compute(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -98,10 +100,20 @@ class FeatureEngine:
         feats["low_20"] = df["low"].rolling(20, min_periods=20).min()
         feats["prev_high_20"] = feats["high_20"].shift(1)
         feats["prev_low_20"] = feats["low_20"].shift(1)
+        if "taker_buy_volume" in df.columns:
+            # Signed order flow (intraday data): share of volume bought by aggressive takers,
+            # mapped to [-1, 1] over the last n bars. Only uses bars up to and including t.
+            signed = 2.0 * df["taker_buy_volume"] - df["volume"]
+            for n in self.flow_windows:
+                vol = df["volume"].rolling(n, min_periods=n).sum().replace(0.0, np.nan)
+                feats[f"flow_imbalance_{n}"] = signed.rolling(n, min_periods=n).sum() / vol
 
+        extra = [
+            c for c in df.columns if c.startswith(PASSTHROUGH_PREFIXES) or c in CALENDAR_COLUMNS
+        ]
         out = pd.concat(
             [
-                df[["open", "high", "low", "close", "volume"]],
+                df[["open", "high", "low", "close", "volume", *extra]],
                 pd.DataFrame(feats, index=df.index),
                 macd(close),
                 candle_geometry(df),

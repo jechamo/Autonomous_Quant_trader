@@ -8,6 +8,7 @@ from aqt.brokers.base import (
     Instrument,
     OrderRequest,
 )
+from aqt.brokers.paper import Fill, PaperExchange
 from aqt.brokers.simulated import SimulatedBroker
 from aqt.brokers.trading212 import Trading212Broker
 
@@ -18,8 +19,10 @@ __all__ = [
     "BrokerHealth",
     "BrokerOrder",
     "BrokerPosition",
+    "Fill",
     "Instrument",
     "OrderRequest",
+    "PaperExchange",
     "SimulatedBroker",
     "Trading212Broker",
 ]
