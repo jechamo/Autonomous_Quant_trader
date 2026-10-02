@@ -8,6 +8,7 @@ Sistema de trading cuantitativo. PRD: `docs/PRD.md`. Estado requisito a requisit
 - `make check` — ruff + format check + mypy + pytest con cobertura (debe quedar verde antes de commit).
 - `uv run python -m services.research.cli run --strategy momentum` — research reproducible.
 - `uv run python tests/test_traceability.py` — regenera el resumen de la matriz de trazabilidad.
+- `AQT.cmd` / `uv run python -m services.launcher` — menú de arranque (Textual) con todos los modos.
 - `uv run python -m services.trader run` — trader en streaming (PAPER, Binance) + dashboard local
   en `http://127.0.0.1:8000` con el Research Lab programado; `--market stocks` usa Alpaca (claves en
   `.env`). `research` lanza un ciclo del lab; `simulate [--learn]` reproduce la historia real.

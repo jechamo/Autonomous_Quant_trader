@@ -3,6 +3,10 @@
 Bot intradía de alta rotación sobre datos en tiempo real de **Binance spot**. Corre en tu
 máquina, guarda todo en **SQLite** y sirve un dashboard en `http://127.0.0.1:8000`.
 
+Menú de arranque: doble clic en `AQT.cmd` en la raíz del repo (o `uv run python -m
+services.launcher`). Elige el modo con las flechas, rellena los campos (cada uno explica qué hace),
+`F5` arranca, `F2` copia el comando y `Ctrl+C` lo para y vuelve al menú.
+
 ```bash
 uv sync
 uv run python -m services.trader run                               # top-10 USDC + Research Lab

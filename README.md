@@ -34,6 +34,10 @@ Estado detallado requisito por requisito: [`docs/prd-traceability.md`](docs/prd-
 
 ## Trader en streaming (local)
 
+La forma más fácil: **doble clic en `AQT.cmd`** (Windows) o `./aqt.sh` (macOS/Linux). Abre un
+menú con cada forma de arrancar, para qué sirve y sus opciones explicadas, y muestra el comando
+exacto antes de lanzarlo. Solo PAPER. También: `uv run python -m services.launcher`.
+
 ```bash
 uv sync
 uv run python -m services.trader run                     # top-10 USDC en vivo + dashboard + Research Lab

@@ -18,6 +18,7 @@ dependencies = [
     "uvicorn>=0.30",
     "websockets>=12",
     "scikit-learn>=1.5",
+    "textual>=0.80",
 ]
 
 [dependency-groups]
