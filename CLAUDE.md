@@ -14,6 +14,7 @@ Sistema de trading cuantitativo. PRD: `docs/PRD.md`. Estado requisito a requisit
   `.env`). `research` lanza un ciclo del lab; `simulate [--learn]` reproduce la historia real;
   `news [--dry-run]` genera «Noticias del día» (titulares de Alpaca + OpenAI).
 - Estudio de reglas (qué se prueba y por qué): `docs/estudio-reglas.md`.
+- Pruebas con datos reales pendientes (para ejecutar en local): `docs/pruebas-locales.md`.
 
 ## Regla obligatoria: matriz de trazabilidad
 Todo cambio que implemente, modifique o elimine algo relacionado con un requisito del PRD

@@ -118,6 +118,8 @@ rebota» o el patrón de las salidas a bolsa? Respuesta: estudio de reglas con e
 - ✅ «Noticias del día»: cada día de mercado a las 08:45 de Nueva York el Analista IA lee los
   titulares reales (con la fecha y si abre el mercado), resume lo importante, descarta lo que no
   esté en los titulares y propone hipótesis que el lab examina; panel en el dashboard. Nunca opera.
+- ⏳ Pruebas con datos reales (Alpaca + OpenAI) en el PC del usuario:
+  [`pruebas-locales.md`](pruebas-locales.md).
 - ✅ Prueba agrupada (panel) de las reglas diarias: una regla para todo el universo, fechas
   comunes y una observación por fecha; en vivo, una sola estrategia sobre todos los valores.
 
