@@ -30,3 +30,4 @@ data/stream/
 .idea/
 .DS_Store
 node_modules/
+data/logs/
