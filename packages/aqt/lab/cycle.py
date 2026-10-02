@@ -20,7 +20,7 @@ from __future__ import annotations
 import os
 import time
 from collections import Counter
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Any, Protocol
 
@@ -32,6 +32,8 @@ from aqt.backtest.costs import CostModel
 from aqt.features.cross_section import augment
 from aqt.features.engine import FeatureEngine
 from aqt.lab.registry import RuleRecord, RuleRegistry, RuleStatus
+from aqt.news.book import NewsBook
+from aqt.news.items import NewsItem
 from aqt.research.study import StudyConfig, apply_global_fdr, run_study
 from aqt.strategies.dsl import StrategySpec
 from aqt.strategies.intraday import INTRADAY_CATALOG
@@ -47,6 +49,7 @@ from aqt.stream.store import SQLiteStore
 KlineLoader = Callable[[str, int, int], pd.DataFrame]
 BarLoader = Callable[[str, int, int], pd.DataFrame]
 IntervalLoader = Callable[[str, int, int, str], pd.DataFrame]
+NewsLoader = Callable[[Sequence[str], int, int], list[NewsItem]]
 _TIMEFRAMES = {k: float(v) for k, v in TIMEFRAME_SECONDS.items()}
 
 
@@ -59,6 +62,7 @@ class LabConfig:
     timeframes: tuple[str, ...] = ()  # several timeframes in one cycle (default: ``timeframe``)
     intraday_days: float = 7.0  # 1-minute research uses at most this much (1-second klines)
     daily_days: float = 1825.0  # daily bars need years: 252-bar warm-up + enough trades per symbol
+    news_days: float = 1095.0  # headline history for the news_* features (needs a news loader)
     fee_pct: float = 0.001
     spread_pct: float = 0.0001
     slippage_pct: float = 0.0005
@@ -84,12 +88,12 @@ class LabConfig:
     def all_timeframes(self) -> tuple[str, ...]:
         return self.timeframes or (self.timeframe,)
 
-    def catalog_for(self, timeframe: str) -> tuple[str, tuple[str, ...]]:
-        """Swing catalog from one hour up (holds overnight), intraday catalog below. Daily-only
-        and equity-only swing families are left out where they were never documented."""
+    def catalog_for(self, timeframe: str, news: bool = False) -> tuple[str, tuple[str, ...]]:
+        """Swing catalog from one hour up (holds overnight), intraday catalog below. Daily-only,
+        equity-only and news swing families are left out where they cannot be tested."""
         tf_s = _TIMEFRAMES[timeframe]
         if tf_s >= 3600:
-            return "swing", swing_families_for(self.swing_families, tf_s, self.session)
+            return "swing", swing_families_for(self.swing_families, tf_s, self.session, news)
         return "intraday", self.families
 
     def days_for(self, timeframe: str) -> float:
@@ -249,8 +253,10 @@ def run_research_cycle(
     loader: KlineLoader | LabData,
     end_ms: int | None = None,
     clock: Callable[[], float] = time.time,
+    news_loader: NewsLoader | None = None,
 ) -> CycleResult:
-    """``loader`` is a 1-second kline loader (crypto) or any :class:`LabData` (e.g. stocks)."""
+    """``loader`` is a 1-second kline loader (crypto) or any :class:`LabData` (e.g. stocks).
+    With a ``news_loader`` (stocks + Alpaca keys) the news features and families are tested."""
     data: LabData = (
         loader
         if isinstance(loader, KlineData | BarData)
@@ -263,13 +269,29 @@ def run_research_cycle(
         {**asdict(cfg), "start_ms": start_ms, "end_ms": end_ms, "symbols": list(cfg.symbols)}
     )
     try:
-        summary, promoted = _cycle(registry, cfg, data, start_ms, end_ms, run_id)
+        summary, promoted = _cycle(registry, cfg, data, start_ms, end_ms, run_id, news_loader)
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
         registry.finish_run(run_id, {}, status="error", error=error)
         return CycleResult(run_id, {}, [], error)
     registry.finish_run(run_id, summary)
     return CycleResult(run_id, summary, promoted)
+
+
+def _load_news(
+    cfg: LabConfig, end_ms: int, loader: NewsLoader | None
+) -> tuple[NewsBook | None, dict[str, Any]]:
+    """Headlines for the news features; a news outage only switches the news families off."""
+    if loader is None:
+        return None, {"enabled": False}
+    start_ms = end_ms - int(cfg.news_days * 86_400_000)
+    try:
+        items = loader(cfg.symbols, start_ms, end_ms)
+    except Exception as exc:
+        return None, {"enabled": False, "error": f"{type(exc).__name__}: {exc}"[:300]}
+    book = NewsBook(start_ms / 1000, end_ms / 1000)
+    book.add(items)
+    return book, {"enabled": True, "headlines": len(items), "days": cfg.news_days}
 
 
 def _cycle(
@@ -279,8 +301,10 @@ def _cycle(
     start_ms: int,
     end_ms: int,
     run_id: int,
+    news_loader: NewsLoader | None = None,
 ) -> tuple[dict[str, Any], list[str]]:
     costs = cfg.costs
+    news, news_info = _load_news(cfg, end_ms, news_loader)
     hyp_store = HypothesisStore(registry.store) if cfg.include_ai_hypotheses else None
     tested_hyps: dict[str, int] = {}  # AI hypothesis name -> id
     studies: list[tuple[str, Any]] = []
@@ -296,11 +320,21 @@ def _cycle(
                 n_bars[f"{sym}@{tf}"] = len(b)
         if not raw:
             continue
-        augmented[tf] = augment(raw, _TIMEFRAMES[tf], cfg.session)
-        catalog, families = cfg.catalog_for(tf)
+        augmented[tf] = augment(raw, _TIMEFRAMES[tf], cfg.session, news)
+        catalog, families = cfg.catalog_for(tf, news=news is not None)
         ai_specs: dict[str, tuple[StrategySpec, dict[str, list[float | int]]]] = {}
-        for h in hyp_store.pending(tf) if hyp_store is not None else []:
-            ai_specs[h["name"]] = (h["spec_obj"], h["grid_obj"])
+        pending = hyp_store.pending(tf) if hyp_store is not None else []
+        columns: set[str] = set()
+        if pending:
+            columns = set(FeatureEngine().compute(next(iter(augmented[tf].values()))).columns)
+        for h in pending:
+            spec = h["spec_obj"]
+            used = spec.entry.features_used() | (
+                spec.exit.exit_signal.features_used() if spec.exit.exit_signal else set()
+            )
+            if not used <= columns:
+                continue  # e.g. news features without a news source: stays pending
+            ai_specs[h["name"]] = (spec, h["grid_obj"])
             tested_hyps[h["name"]] = h["id"]
         study = run_study(
             augmented[tf],
@@ -392,6 +426,7 @@ def _cycle(
         "n_bars": n_bars,
         "hypotheses_by_timeframe": per_tf,
         "families": list(cfg.families) + list(cfg.swing_families),
+        "news": news_info,
         "n_pairs": len(tagged),
         "n_hypotheses": n_hypotheses,
         "n_global_discoveries": n_discoveries,

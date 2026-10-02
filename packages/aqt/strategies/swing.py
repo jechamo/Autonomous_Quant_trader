@@ -16,7 +16,9 @@ with the cross-sectional features of ``aqt.features.cross_section``:
 * classic candlestick reversals (engulfing, hammer) with context — measured on purpose even if
   the evidence after costs is weak (Marshall, Young & Rose 2006);
 * 52-week-high anchoring — daily only (George & Hwang 2004);
-* turn of the month — daily US stocks only (Ariel 1987; Lakonishok & Smidt 1988).
+* turn of the month — daily US stocks only (Ariel 1987; Lakonishok & Smidt 1988);
+* news (US stocks with a news source): big moves *with* abnormal news drift, big drops *without*
+  news revert (Chan 2003); earnings headline + gap up + volume drifts (Bernard & Thomas 1989).
 
 Holding periods are long enough for costs to be a small fraction of the expected move, which is
 precisely where the minute-scale catalog failed. Why each rule is here, and which were left out
@@ -263,15 +265,68 @@ SWING_CATALOG: dict[str, tuple[StrategySpec, Grid]] = {
         ),
         {"pre": [2, 4]},
     ),
+    "news_drift": (
+        StrategySpec(
+            name="news_drift",
+            family="news",
+            description="Strong rise on abnormal news flow and volume: the news keeps drifting in.",
+            entry=Rule(
+                all_of=[
+                    C(left="news_ratio", op=">", right="$k"),
+                    C(left="ret_1", op=">", right=0.02),
+                    C(left="volume_ratio", op=">", right=1.5),
+                ]
+            ),
+            exit=_exit(),
+            params={"k": 2.0, "stop": 2.5, "hold": 10},
+        ),
+        {"k": [2.0, 3.0], "hold": [5, 20]},
+    ),
+    "quiet_drop_reversal": (
+        StrategySpec(
+            name="quiet_drop_reversal",
+            family="news",
+            description="Sharp drop with no more news than usual, in an uptrend: likely to revert.",
+            entry=Rule(
+                all_of=[
+                    C(left="ret_1", op="<", right="$drop"),
+                    C(left="news_ratio", op="<", right=1.0),
+                    C(left="close", op=">", right="sma_200"),
+                ]
+            ),
+            exit=_exit(signal=Rule(all_of=[C(left="rsi_2", op=">", right=70)])),
+            params={"drop": -0.03, "stop": 2.5, "hold": 5},
+        ),
+        {"drop": [-0.02, -0.04], "hold": [3, 6]},
+    ),
+    "earnings_gap_drift": (
+        StrategySpec(
+            name="earnings_gap_drift",
+            family="news",
+            description="Earnings headline, gap up and heavy volume: post-earnings drift.",
+            entry=Rule(
+                all_of=[
+                    C(left="news_earnings_1d", op=">=", right=1),
+                    C(left="gap", op=">", right="$gap"),
+                    C(left="volume_ratio", op=">", right=2.0),
+                ]
+            ),
+            exit=_exit(stop=3.0),
+            params={"gap": 0.03, "hold": 20},
+        ),
+        {"gap": [0.02, 0.05], "hold": [20, 40]},
+    ),
 }
 
-# Effects documented on daily bars only, and calendar effects documented on US equities only.
+# Effects documented on daily bars only, calendar effects documented on US equities only, and
+# rules that need the news_* features (``aqt.news``).
 DAILY_ONLY = frozenset({"near_52w_high", "turn_of_month"})
 EQUITY_ONLY = frozenset({"turn_of_month"})
+NEWS_FAMILIES = frozenset({"news_drift", "quiet_drop_reversal", "earnings_gap_drift"})
 
 
 def swing_families_for(
-    families: Iterable[str], timeframe_s: float, session: str
+    families: Iterable[str], timeframe_s: float, session: str, news: bool = False
 ) -> tuple[str, ...]:
     """The families worth testing at this timeframe and session (fewer, better hypotheses)."""
     return tuple(
@@ -279,6 +334,7 @@ def swing_families_for(
         for f in families
         if not (f in DAILY_ONLY and timeframe_s < 86_400)
         and not (f in EQUITY_ONLY and session != "us_equity")
+        and not (f in NEWS_FAMILIES and not news)
     )
 
 

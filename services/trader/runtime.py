@@ -17,6 +17,7 @@ from aqt.stream.store import SQLiteStore
 
 from services.trader.golive_monitor import GoLiveMonitor
 from services.trader.lab_scheduler import LabScheduler
+from services.trader.news_poller import NewsPoller
 
 log = logging.getLogger(__name__)
 
@@ -41,6 +42,7 @@ class TraderRuntime:
         persist_controls: bool = True,
         lab: LabScheduler | None = None,
         golive: GoLiveMonitor | None = None,
+        news: NewsPoller | None = None,
     ) -> None:
         self.engine = engine
         self.store = store
@@ -53,6 +55,7 @@ class TraderRuntime:
         self.persist_controls = persist_controls
         self.lab = lab
         self.golive = golive
+        self.news = news
         if persist_controls:
             self._restore_settings()
 
@@ -118,6 +121,8 @@ class TraderRuntime:
         snap["uptime_s"] = self.clock() - self.started_at
         if self.lab is not None:
             snap["lab"] = self.lab.status()
+        if self.news is not None:
+            snap["news"] = self.news.status()
         if self.golive is not None and self.golive.report is not None:
             r = self.golive.report
             snap["golive"] = {
@@ -161,6 +166,8 @@ class TraderRuntime:
         if self.golive is not None:
             self.golive.begin()
             self._tasks.append(asyncio.create_task(self.golive.loop(), name="golive"))
+        if self.news is not None:
+            self._tasks.append(asyncio.create_task(self.news.loop(), name="news"))
         venue_loop = getattr(self.engine.broker, "run", None)
         if venue_loop is not None:  # remote venue (Alpaca paper): order routing + reconciliation
             self._tasks.append(asyncio.create_task(venue_loop(), name="venue"))

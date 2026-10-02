@@ -14,6 +14,7 @@ from aqt.features.cross_section import (
 from aqt.features.engine import FeatureEngine
 from aqt.lab.cycle import KlineData, LabConfig, run_research_cycle
 from aqt.lab.registry import RuleRegistry
+from aqt.news.book import NewsBook
 from aqt.strategies import resolve_strategy
 from aqt.strategies.dsl import Condition, ExitRules, Rule, StrategySpec
 from aqt.strategies.swing import SWING_CATALOG
@@ -130,7 +131,8 @@ def test_documented_rules_fire_on_their_textbook_setups() -> None:
 
 def test_swing_catalog_renders_on_augmented_features() -> None:
     bars = {s: hourly(300, i) for i, s in enumerate("ABCD")}
-    feats = FeatureEngine().compute(augment(bars, H)["A"])
+    news = NewsBook(coverage_start=0.0, covered_until=float("inf"))  # news_* columns for news rules
+    feats = FeatureEngine().compute(augment(bars, H, news=news)["A"])
     for name, (spec, grid) in SWING_CATALOG.items():
         assert grid and resolve_strategy(name, "swing")[0] is spec
         sig = spec.entry_signal(feats)

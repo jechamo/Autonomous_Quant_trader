@@ -230,7 +230,8 @@ def run(
     engine = StreamingEngine(cfg, store=store, broker=venue)
     engine.kill_switch = kill
     _apply_exchange_info(engine, infos)
-    book = ResearchBarBook(bvc=m.bvc, session=m.session)
+    news = _news_poller(syms) if m.name == "stocks" else None
+    book = ResearchBarBook(bvc=m.bvc, session=m.session, news=news.book if news else None)
     _seed_book(book, syms, m, 60.0)
     lab = LabScheduler(
         engine,
@@ -243,7 +244,7 @@ def run(
     )
     lab.sync()  # load the registry's active rules before the first tick
     golive = GoLiveMonitor(engine, store, make_notifier(), external_venue=broker == "alpaca")
-    runtime = TraderRuntime(engine, store, feed, record=record, lab=lab, golive=golive)
+    runtime = TraderRuntime(engine, store, feed, record=record, lab=lab, golive=golive, news=news)
     url = f"http://{host}:{port}"
     where = "orders -> Alpaca PAPER account" if broker == "alpaca" else "local simulated fills"
     typer.echo(f"PAPER trader ({m.name}, {where}) on {', '.join(syms)} - dashboard {url}")
@@ -257,6 +258,36 @@ def run(
     if open_browser:
         webbrowser.open(url)
     uvicorn.run(create_app(runtime), host=host, port=port, log_level="warning")
+
+
+def _news_loader(m: Market) -> Any:
+    """Alpaca News history for the research cycle (stocks with Alpaca keys; else ``None``)."""
+    if m.name != "stocks":
+        return None
+    from aqt.stream.alpaca import alpaca_credentials
+
+    creds = alpaca_credentials()
+    if creds is None:
+        return None
+    from aqt.news.alpaca import load_alpaca_news
+
+    def load(symbols: Any, start_ms: int, end_ms: int) -> Any:
+        return load_alpaca_news(symbols, start_ms, end_ms, *creds)
+
+    return load
+
+
+def _news_poller(syms: tuple[str, ...]) -> Any:
+    """Live headlines for the news rules (the stocks trader always has Alpaca keys)."""
+    from aqt.news.alpaca import fetch_news
+    from aqt.stream.alpaca import alpaca_credentials
+
+    from services.trader.news_poller import NewsPoller
+
+    creds = alpaca_credentials()
+    if creds is None:
+        return None
+    return NewsPoller(lambda start, end: fetch_news(*creds, start, end, syms))
 
 
 def _alpaca_venue(syms: tuple[str, ...], capital: float) -> Any:
@@ -333,6 +364,7 @@ def research(
     analyst: bool = typer.Option(
         True, help="First ask the AI Analyst for hypotheses (needs OPENAI_API_KEY)"
     ),
+    news: bool = typer.Option(True, help="Test the news rules (stocks with Alpaca keys)"),
 ) -> None:
     """Run one Research Lab cycle: discover, validate and promote rules (no trading)."""
     import time
@@ -393,7 +425,8 @@ def research(
         f"{days:g} days, {cfg.workers} workers..."
     )
     t0 = time.monotonic()
-    result = run_research_cycle(store, cfg, data, end_ms=end_ms)
+    news_loader = _news_loader(m) if news else None
+    result = run_research_cycle(store, cfg, data, end_ms=end_ms, news_loader=news_loader)
     if result.error:
         typer.echo(f"research cycle #{result.run_id} failed: {result.error}")
         raise typer.Exit(1)
@@ -405,6 +438,11 @@ def research(
     )
     by_tf = ", ".join(f"{k} {v}" for k, v in s.get("hypotheses_by_timeframe", {}).items())
     typer.echo(f"hypotheses by timeframe: {by_tf or '-'}")
+    ni = s.get("news") or {}
+    if ni.get("enabled"):
+        typer.echo(f"news: {ni['headlines']} headlines over {ni['days']:g} days")
+    elif m.name == "stocks":
+        typer.echo(f"news rules: off ({ni.get('error') or 'needs Alpaca keys and --news'})")
     for g in s["golden"]:
         verdict = "PASS" if g["passed"] else "fail"
         typer.echo(
@@ -448,7 +486,10 @@ def _run_analyst(store: SQLiteStore, m: Market, tfs: tuple[str, ...]) -> None:
         typer.echo("AI Analyst: off (set OPENAI_API_KEY in .env)")
         return
     typer.echo(f"AI Analyst ({cfg.model}): reading the lab's results...")
-    res = run_analyst(store, OpenAIClient(cfg), cfg, m.name, tfs, _families(), m.session)
+    res = run_analyst(
+        store, OpenAIClient(cfg), cfg, m.name, tfs, _families(), m.session,
+        news=_news_loader(m) is not None,
+    )  # fmt: skip
     if res.skipped:
         typer.echo(f"AI Analyst skipped: {res.skipped}")
         return
@@ -477,9 +518,8 @@ def analyst(
     tfs = tuple(t.strip() for t in timeframes.split(",") if t.strip()) or m.timeframes
     store = SQLiteStore(db or m.db)
     if dry_run:
-        ctx = build_context(
-            store, m.name, tfs, _families(), available_features(m.session), HypothesisStore(store)
-        )
+        feats = available_features(m.session, news=_news_loader(m) is not None)
+        ctx = build_context(store, m.name, tfs, _families(), feats, HypothesisStore(store))
         typer.echo(json.dumps(ctx, indent=2, default=str, ensure_ascii=False)[:6000])
         return
     _run_analyst(store, m, tfs)

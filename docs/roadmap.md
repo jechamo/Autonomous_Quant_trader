@@ -112,7 +112,8 @@ rebota» o el patrón de las salidas a bolsa? Respuesta: estudio de reglas con e
 - ✅ Familias nuevas en el lab: `streak_reversion`, `rsi2_reversion`, `ibs_reversion`,
   `candle_reversal` (1h/4h/1d), `near_52w_high` (1d) y `turn_of_month` (1d, acciones).
 - ✅ Barras diarias en el lab con 5 años de historia (cripto y acciones).
-- ⏳ Noticias reales (Alpaca News) como features deterministas y familias de Chan (2003) y PEAD.
+- ✅ Noticias reales (Alpaca News) como features deterministas (sin LLM, sin look-ahead, NaN
+  sin cobertura) y familias de Chan (2003) y PEAD en acciones; sondeo en vivo cada minuto.
 - ⏳ «Noticias del día»: el Analista IA resume los titulares reales del día (con la fecha) y
   propone hipótesis; nunca opera.
 - ⏳ Prueba agrupada (panel) entre símbolos para las reglas diarias.

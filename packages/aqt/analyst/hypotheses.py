@@ -27,6 +27,7 @@ from pydantic import ValidationError
 from aqt.analyst.client import AnalystConfig, AnalystError, OpenAIClient
 from aqt.features.cross_section import augment
 from aqt.features.engine import FeatureEngine
+from aqt.news.book import NewsBook
 from aqt.strategies.dsl import ExitRules, Rule, StrategySpec
 
 if TYPE_CHECKING:  # the analyst never imports the store at runtime (it pulls broker types in)
@@ -45,8 +46,9 @@ _NAME = re.compile(r"^[a-z][a-z0-9_]{2,39}$")
 _NON_FEATURES = {"regime"}
 
 
-def available_features(session: str = "24/7") -> list[str]:
-    """Every numeric column a rule can reference (computed on a small synthetic panel)."""
+def available_features(session: str = "24/7", news: bool = False) -> list[str]:
+    """Every numeric column a rule can reference (computed on a small synthetic panel); the
+    ``news_*`` columns only when the lab has a news source."""
     rng = np.random.default_rng(0)
     idx = pd.date_range("2026-01-05 14:00", periods=260, freq="1h", tz="UTC")
     frames = {}
@@ -60,7 +62,8 @@ def available_features(session: str = "24/7") -> list[str]:
              "taker_buy_volume": vol / 2},
             index=idx,
         )  # fmt: skip
-    feats = FeatureEngine().compute(augment(frames, 3600, session)["A"])
+    book = NewsBook(coverage_start=0.0, covered_until=float("inf")) if news else None
+    feats = FeatureEngine().compute(augment(frames, 3600, session, book)["A"])
     numeric = feats.select_dtypes(include="number").columns
     return sorted(c for c in numeric if c not in _NON_FEATURES)
 
@@ -311,11 +314,12 @@ def run_analyst(
     families: dict[str, str],
     session: str = "24/7",
     clock: Callable[[], float] = time.time,
+    news: bool = False,
 ) -> AnalystResult:
     hyps = HypothesisStore(store, clock)
     if hyps.calls_today() >= cfg.max_calls_per_day:
         return AnalystResult(skipped=f"daily budget reached ({cfg.max_calls_per_day} calls)")
-    features = available_features(session)
+    features = available_features(session, news)
     context = build_context(store, market, timeframes, families, features, hyps)
     system = SYSTEM_PROMPT.replace("{max_hypotheses}", str(cfg.max_hypotheses))
     hyps.count_call()

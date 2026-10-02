@@ -22,6 +22,7 @@ import pandas as pd
 
 from aqt.features.cross_section import augment
 from aqt.features.engine import FeatureEngine
+from aqt.news.book import NewsBook
 from aqt.strategies.dsl import StrategySpec
 from aqt.stream.bars import Bar
 from aqt.stream.features import FeatureSnapshot
@@ -42,11 +43,18 @@ class _Series:
 class ResearchBarBook:
     """Shared research bars + features per (symbol, timeframe); idempotent per engine bar."""
 
-    def __init__(self, window: int = 1000, bvc: bool = False, session: str = "24/7") -> None:
+    def __init__(
+        self,
+        window: int = 1000,
+        bvc: bool = False,
+        session: str = "24/7",
+        news: NewsBook | None = None,
+    ) -> None:
         self.window = window
         # Stocks: estimate taker-buy volume with BVC from bar returns, as research does.
         self.bvc = bvc
         self.session = session  # calendar features (minutes to the New York close for stocks)
+        self.news = news  # live headlines (a poller keeps it current) -> news_* features
         self._series: dict[tuple[str, float], _Series] = {}
         self._seen: dict[tuple[str, float], float] = {}
         self._fe = FeatureEngine()
@@ -149,7 +157,9 @@ class ResearchBarBook:
             if tf == timeframe and len(other.bars) >= 2
         }
         try:
-            s.features = self._fe.compute(augment(frames, timeframe, self.session)[symbol])
+            s.features = self._fe.compute(
+                augment(frames, timeframe, self.session, self.news)[symbol]
+            )
         except ValueError:  # degenerate window (e.g. a non-positive price)
             s.features = None
 
@@ -200,6 +210,9 @@ class DslStreamStrategy(StreamStrategy):
         if not self.description:
             self.description = self.spec.description or self.spec.name
         self._entry_seq = 0  # a seeded book is at seq 0: wait for the first new bar
+        self._needs = self.spec.entry.features_used() | (
+            self.spec.exit.exit_signal.features_used() if self.spec.exit.exit_signal else set()
+        )
         self._exit_seq = -1
         self._exit_now = False
 
@@ -215,6 +228,8 @@ class DslStreamStrategy(StreamStrategy):
         s = self.book.series(self.symbol, self.timeframe_s)
         if s.features is None or s.features.empty:
             return None
+        if not self._needs <= set(s.features.columns):
+            return None  # e.g. a news rule while no news source is connected: never signal
         return s.features, s.final_seq
 
     def entry(self, f: FeatureSnapshot) -> EntryIntent | None:

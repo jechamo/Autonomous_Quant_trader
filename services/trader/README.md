@@ -86,6 +86,9 @@ uv run python -m services.trader simulate --learn --headless  # el bucle complet
 - `simulate` y `research` funcionan sin cuenta con datos de Yahoo (~7 días de velas de 1 min).
 - `run` necesita claves **paper** gratuitas de Alpaca en `.env` (`ALPACA_API_KEY_ID`,
   `ALPACA_API_SECRET_KEY`): dan streaming IEX y años de historia para el lab (15 min, 1 h y 1 d).
+- **Noticias** (con claves de Alpaca): el lab descarga 3 años de titulares (Alpaca News, caché
+  por mes) y prueba las reglas de noticias (`news_drift`, `quiet_drop_reversal`,
+  `earnings_gap_drift`); el trader las mantiene al día cada minuto. `--no-news` las desactiva.
 - Reglas intradía: sin entradas en los últimos 15 min y todo cerrado 5 min antes de las 16:00 NY.
   Reglas swing (≥ 1 h): sólo entran con mercado abierto y pueden mantener la posición de un día
   para otro.

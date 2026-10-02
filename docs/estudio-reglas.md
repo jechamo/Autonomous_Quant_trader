@@ -1,8 +1,9 @@
 # Estudio de reglas: qué merece la pena aplicar
 
 **Fecha:** 2026-10-02 · **Implementación:** `packages/aqt/strategies/swing.py` (familias),
-`packages/aqt/features/engine.py` y `packages/aqt/features/cross_section.py` (features).
-**Trazabilidad:** R10.27–R10.32, R11.28–R11.30, R12.30.
+`packages/aqt/features/engine.py` y `packages/aqt/features/cross_section.py` (features),
+`packages/aqt/news/` (noticias). **Trazabilidad:** R10.27–R10.36, R11.28–R11.32, R12.30–R12.31,
+R21.23–R21.24.
 
 ## 1. Cómo leer este estudio
 
@@ -120,7 +121,14 @@ variante nueva hace más estricto el FDR para todas las demás).
   margen para que research y vivo vean lo mismo.
 - **Las grandes tecnológicas tienen noticias casi todos los días**, así que «con o sin noticias»
   se mide como intensidad anómala frente a su media, no como presencia.
-- **Estado:** pendiente de implementar (fase 2 de este bloque).
+- **Implementación:** `news_1d` (titulares de las últimas 24 h), `news_ratio` (intensidad frente a
+  la media de los 20 días previos) y `news_earnings_1d` (titulares de resultados según un
+  clasificador de palabras clave). Sólo cuentan titulares publicados al menos 5 minutos antes del
+  cierre de la vela; sin cobertura de noticias el valor es NaN, nunca «sin noticias». Se prueban
+  sólo en acciones y sólo si hay claves de Alpaca (3 años de titulares por defecto).
+- **Reglas:** `news_drift` (`news_ratio > 2–3`, subida > 2 %, volumen > 1,5×),
+  `quiet_drop_reversal` (caída > 2–4 % con `news_ratio < 1`, sobre SMA200) y
+  `earnings_gap_drift` (titular de resultados, gap > 2–5 %, volumen > 2×).
 
 ### 4.7 `candle_reversal` — patrones de velas (C)
 

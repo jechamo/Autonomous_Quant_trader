@@ -7,16 +7,16 @@ existen y que el resumen cuadra con las filas.
 
 **Leyenda:** ✅ hecho · 🟡 parcial · ⏳ pendiente · 🚫 excluido por diseño (y forzado en código)
 
-**Última actualización:** 2026-10-02 · Estudio de reglas documentadas y familias nuevas en el lab
+**Última actualización:** 2026-10-02 · Noticias reales como features y familias de noticias en el lab
 
 <!-- summary:start -->
 | Estado | Requisitos |
 |---|---|
-| ✅ | 204 |
-| 🟡 | 32 |
-| ⏳ | 38 |
+| ✅ | 212 |
+| 🟡 | 33 |
+| ⏳ | 37 |
 | 🚫 | 7 |
-| **Total** | **281** |
+| **Total** | **289** |
 
 | Sección | ✅ | 🟡 | ⏳ | 🚫 | Total |
 |---|---|---|---|---|---|
@@ -29,9 +29,9 @@ existen y que el resumen cuadra con las filas.
 | §7 | 12 | 0 | 0 | 0 | 12 |
 | §8 | 3 | 0 | 0 | 0 | 3 |
 | §9 | 7 | 3 | 4 | 0 | 14 |
-| §10 | 20 | 0 | 6 | 7 | 33 |
-| §11 | 26 | 1 | 3 | 0 | 30 |
-| §12 | 25 | 4 | 1 | 0 | 30 |
+| §10 | 23 | 1 | 5 | 7 | 36 |
+| §11 | 28 | 1 | 3 | 0 | 32 |
+| §12 | 26 | 4 | 1 | 0 | 31 |
 | §13 | 6 | 0 | 0 | 0 | 6 |
 | §14 | 5 | 0 | 1 | 0 | 6 |
 | §15 | 0 | 2 | 2 | 0 | 4 |
@@ -40,7 +40,7 @@ existen y que el resumen cuadra con las filas.
 | §18 | 4 | 1 | 0 | 0 | 5 |
 | §19 | 6 | 2 | 0 | 0 | 8 |
 | §20 | 6 | 1 | 0 | 0 | 7 |
-| §21 | 17 | 0 | 5 | 0 | 22 |
+| §21 | 19 | 0 | 5 | 0 | 24 |
 | §22 | 2 | 0 | 0 | 0 | 2 |
 | §23 | 2 | 0 | 1 | 0 | 3 |
 | §25 | 2 | 1 | 0 | 0 | 3 |
@@ -160,7 +160,7 @@ existen y que el resumen cuadra con las filas.
 | R10.12 | Multi-factor | ⏳ | — | — | — |
 | R10.13 | ML classifiers | ⏳ | — | — | — |
 | R10.14 | ML regressors | ⏳ | — | — | — |
-| R10.15 | Sentiment / news / macro (posterior) | ⏳ | — | — | Fase posterior |
+| R10.15 | Sentiment / news / macro (posterior) | 🟡 | `packages/aqt/news/book.py::news_features`, `packages/aqt/strategies/swing.py::SWING_CATALOG` | `tests/test_news.py::test_cycle_finds_planted_news_drift_and_switches_news_off_without_a_source` | Noticias reales (Alpaca News) como features deterministas y 3 familias (R10.34–R10.36); sentimiento y macro pendientes. El sentimiento puntuado por un LLM no se backtestea (look-ahead del modelo) |
 | R10.16 | Sin HFT | 🚫 | `packages/aqt/stream/engine.py::StreamingEngine` | `tests/test_stream.py::test_paper_fills_after_latency_at_the_far_side_with_fees` | Intradía en streaming (velas de segundos, horizontes de minutos) sí; HFT no: órdenes a mercado con latencia simulada, límite de órdenes/min y cooldown |
 | R10.17 | Sin opciones ni futuros | 🚫 | `packages/aqt/brokers/base.py::Instrument` | — | Sólo acciones/ETF |
 | R10.18 | Sin margen | 🚫 | `packages/aqt/risk/profile.py::AbsoluteLimits` | `tests/test_risk.py::test_property_approved_orders_never_exceed_limits` | `allow_margin=False`; nocional ≤ equity |
@@ -179,6 +179,9 @@ existen y que el resumen cuadra con las filas.
 | R10.31 | Patrones de velas con contexto en el lab automático | ✅ | `packages/aqt/strategies/swing.py::SWING_CATALOG` | `tests/test_swing.py::test_swing_catalog_renders_on_augmented_features` | Familia `candle_reversal` (envolvente o martillo + RSI bajo + EMA200); evidencia débil tras costes, se mide igualmente (nivel C) |
 | R10.32 | Cerca del máximo de 52 semanas | ✅ | `packages/aqt/strategies/swing.py::SWING_CATALOG`, `packages/aqt/strategies/swing.py::swing_families_for` | `tests/test_swing.py::test_documented_rules_fire_on_their_textbook_setups`, `tests/test_swing.py::test_swing_catalog_renders_on_augmented_features`, `tests/test_swing.py::test_catalog_for_keeps_daily_and_equity_effects_where_documented` | Familia `near_52w_high`, sólo en 1d. George y Hwang 2004 |
 | R10.33 | Efecto cambio de mes | ✅ | `packages/aqt/strategies/swing.py::SWING_CATALOG`, `packages/aqt/strategies/swing.py::swing_families_for` | `tests/test_swing.py::test_documented_rules_fire_on_their_textbook_setups`, `tests/test_swing.py::test_swing_catalog_renders_on_augmented_features`, `tests/test_swing.py::test_catalog_for_keeps_daily_and_equity_effects_where_documented` | Familia `turn_of_month`, sólo 1d y acciones; días naturales (festivos pendientes). Ariel 1987; Lakonishok y Smidt 1988 |
+| R10.34 | Deriva tras subida fuerte con noticias anómalas | ✅ | `packages/aqt/strategies/swing.py::SWING_CATALOG` | `tests/test_news.py::test_cycle_finds_planted_news_drift_and_switches_news_off_without_a_source`, `tests/test_news.py::test_news_families_only_with_news`, `tests/test_swing.py::test_swing_catalog_renders_on_augmented_features` | Familia `news_drift` (acciones con fuente de noticias): `news_ratio > k`, `ret_1 > 2 %`, volumen > 1,5×. Chan 2003 |
+| R10.35 | Rebote tras caída fuerte sin noticias | ✅ | `packages/aqt/strategies/swing.py::SWING_CATALOG` | `tests/test_news.py::test_news_families_only_with_news`, `tests/test_swing.py::test_swing_catalog_renders_on_augmented_features` | Familia `quiet_drop_reversal`: caída sin más noticias de lo normal, sobre SMA200. Chan 2003 |
+| R10.36 | Deriva tras resultados (PEAD aproximado) | ✅ | `packages/aqt/strategies/swing.py::SWING_CATALOG` | `tests/test_news.py::test_news_families_only_with_news`, `tests/test_swing.py::test_swing_catalog_renders_on_augmented_features` | Familia `earnings_gap_drift`: titular de resultados + gap al alza + volumen > 2×. Sin datos de consenso. Bernard y Thomas 1989 |
 
 ## §11 Feature Engine
 
@@ -214,6 +217,8 @@ existen y que el resumen cuadra con las filas.
 | R11.28 | Rachas de cierres a la baja / al alza | ✅ | `packages/aqt/indicators/core.py::streaks`, `packages/aqt/features/engine.py::FeatureEngine` | `tests/test_indicators.py::test_streaks_count_consecutive_lower_and_higher_closes`, `tests/test_indicators.py::test_features_have_no_look_ahead` | `down_streak`, `up_streak`; un cierre igual reinicia la racha |
 | R11.29 | RSI(2) y distancia al máximo de 252 barras | ✅ | `packages/aqt/features/engine.py::FeatureEngine` | `tests/test_indicators.py::test_short_term_and_52_week_features` | `rsi_2`, `dist_high_252` (≤ 0) |
 | R11.30 | Calendario mensual (día del mes, días a fin de mes) | ✅ | `packages/aqt/features/cross_section.py::calendar_features` | `tests/test_swing.py::test_month_calendar_uses_each_bars_own_trading_day` | `day_of_month`, `days_to_month_end`; fecha del último instante de la vela (NY en acciones), lo que corrige `day_of_week` en barras diarias de acciones |
+| R11.31 | Features de noticias causales y honestas con la cobertura | ✅ | `packages/aqt/news/book.py::news_features`, `packages/aqt/news/book.py::NewsBook`, `packages/aqt/features/cross_section.py::augment` | `tests/test_news.py::test_news_features_are_causal_and_never_read_missing_coverage_as_quiet` | `news_1d`, `news_ratio` (intensidad frente a la media de 20 días), `news_earnings_1d`; sólo titulares publicados ≥ 5 min antes del cierre de la vela; NaN sin cobertura (nunca «sin noticias» por falta de datos); se ignoran resúmenes de más de 5 valores |
+| R11.32 | Clasificación determinista de titulares | ✅ | `packages/aqt/news/classify.py::classify_headline` | `tests/test_news.py::test_parse_alpaca_news_and_classify_headlines` | Palabras clave (resultados, previsiones, ratings, M&A, FDA, legal, macro, IPO); reproducible y backtesteable, a diferencia de un LLM |
 
 ## §12 Statistical Engine
 
@@ -249,6 +254,7 @@ existen y que el resumen cuadra con las filas.
 | R12.28 | Paridad research ↔ vivo de las features entre valores | ✅ | `packages/aqt/stream/dsl_strategy.py::ResearchBarBook` | `tests/test_swing.py::test_live_cross_sectional_rule_matches_research` | El libro reconstruye el panel con todas las series del timeframe; mismas entradas que el research |
 | R12.29 | Progreso del aprendizaje visible (embudo de hipótesis, reglas hacia champion, ML, IA, actividad) | ✅ | `packages/aqt/lab/progress.py::learning_progress`, `apps/dashboard/local/app.js` | `tests/test_progress.py::test_funnel_accumulates_every_cycle_and_rule_transitions`, `tests/test_progress.py::test_ml_progress_counts_examples_against_what_the_trainer_needs`, `tests/test_progress.py::test_rule_progress_and_learning_api` | Panel «Aprendizaje»: circuito cuyos nodos se iluminan y reciben chispas con cada novedad, y bolas que se llenan (reglas, machine learning, camino a real); detalle solo al pasar el ratón. `GET /api/learning` |
 | R12.30 | Barras diarias en el lab con historia larga y familias sólo donde están documentadas | ✅ | `packages/aqt/lab/cycle.py::LabConfig`, `services/trader/cli.py::MARKETS` | `tests/test_swing.py::test_catalog_for_keeps_daily_and_equity_effects_where_documented` | `daily_days` = 5 años para 1d (warm-up de 252 barras + muestra); efectos diarios fuera de 1h/4h y de calendario de acciones fuera de cripto. Riesgo: muestra por símbolo pequeña; falta prueba agrupada entre símbolos |
+| R12.31 | Paridad research ↔ vivo de las features de noticias | ✅ | `packages/aqt/stream/dsl_strategy.py::ResearchBarBook`, `packages/aqt/stream/dsl_strategy.py::DslStreamStrategy` | `tests/test_news.py::test_live_news_rule_matches_research`, `tests/test_news.py::test_news_rule_never_signals_without_a_news_source` | El libro en vivo pasa su `NewsBook` a `augment`; una regla que necesita features ausentes nunca da señal |
 
 ## §13 Bayesian Evidence Engine
 
@@ -376,6 +382,8 @@ lectura para `authenticated`, sin acceso `anon` y escritura sólo vía `service_
 | R21.20 | Investigación y simulación de acciones | ✅ | `packages/aqt/lab/cycle.py::BarData`, `services/trader/cli.py::simulate` | `tests/test_stocks.py::test_lab_cycle_runs_on_stock_bars` | `--market stocks` en `research`, `simulate` y `run` |
 | R21.21 | Broker Alpaca **paper**: órdenes reales a la cuenta simulada, subcuenta de capital, sin margen | ✅ | `packages/aqt/brokers/alpaca_paper.py::AlpacaPaperBroker` | `tests/test_alpaca_paper.py::test_orders_are_routed_filled_and_reconciled` | `run --market stocks --broker alpaca --cash N`; sólo `paper-api.alpaca.markets` (cualquier otro host se rechaza); toda orden sigue pasando por el Risk Engine |
 | R21.22 | Historia larga a varias escalas (klines Binance, barras Alpaca remuestreadas) | ✅ | `packages/aqt/stream/history.py::load_binance_klines`, `packages/aqt/stream/alpaca.py::load_alpaca_bars` | `tests/test_swing.py::test_resample_and_kline_rows` | Caché mensual en Parquet; barras alineadas a fronteras UTC; BVC al timeframe |
+| R21.23 | Adaptador Alpaca News (titulares históricos con hora de publicación) con caché | ✅ | `packages/aqt/news/alpaca.py::fetch_news`, `packages/aqt/news/alpaca.py::load_alpaca_news` | `tests/test_news.py::test_fetch_news_paginates_oldest_first` | Mismas claves paper que las barras; caché por símbolo y mes en `data/stream/alpaca_news`; 3 años de historia por defecto (`news_days`); la primera descarga tarda (límite de 200 peticiones/min) |
+| R21.24 | Noticias en vivo para las reglas del trader de acciones | ✅ | `services/trader/news_poller.py::NewsPoller`, `services/trader/runtime.py::TraderRuntime` | `tests/test_news.py::test_news_poller_backfills_then_overlaps_and_survives_errors` | Backfill de 22 días y sondeo cada minuto con solape; un fallo no detiene el trading; estado en `/api/state` (`news`) |
 | R22.01 | El núcleo no se implementa en Lovable | ✅ | `apps/dashboard/README.md` | — | — |
 | R22.02 | El frontend nunca tiene claves del broker | ✅ | `.env.example` | — | Sólo backend; dashboard usa anon key + Auth |
 

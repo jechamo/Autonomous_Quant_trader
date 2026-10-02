@@ -29,6 +29,8 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 
+from aqt.news.book import NewsBook, news_features
+
 NY = ZoneInfo("America/New_York")
 
 XS_PERIODS = (5, 20, 60)
@@ -45,7 +47,7 @@ CALENDAR_COLUMNS = (
     "day_of_month",
     "days_to_month_end",
 )
-PASSTHROUGH_PREFIXES = ("xs_",)
+PASSTHROUGH_PREFIXES = ("xs_", "news_")
 
 
 def cross_sectional_features(closes: Mapping[str, pd.Series]) -> dict[str, pd.DataFrame]:
@@ -97,14 +99,21 @@ def calendar_features(index: pd.DatetimeIndex, timeframe_s: float, session: str)
 
 
 def augment(
-    bars: Mapping[str, pd.DataFrame], timeframe_s: float, session: str = "24/7"
+    bars: Mapping[str, pd.DataFrame],
+    timeframe_s: float,
+    session: str = "24/7",
+    news: NewsBook | None = None,
 ) -> dict[str, pd.DataFrame]:
-    """Add cross-sectional + calendar columns to every symbol's bars (research and live)."""
+    """Add cross-sectional + calendar (+ news, when a :class:`NewsBook` is given) columns to
+    every symbol's bars — the one function both research and live use."""
     xs = cross_sectional_features({s: b["close"] for s, b in bars.items() if not b.empty})
     out: dict[str, pd.DataFrame] = {}
     for sym, b in bars.items():
-        parts = [b, calendar_features(pd.DatetimeIndex(b.index), timeframe_s, session)]
+        index = pd.DatetimeIndex(b.index)
+        parts = [b, calendar_features(index, timeframe_s, session)]
         if sym in xs:
             parts.append(xs[sym])
+        if news is not None:
+            parts.append(news_features(news, sym, index, timeframe_s))
         out[sym] = pd.concat(parts, axis=1)
     return out
